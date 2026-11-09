@@ -1,0 +1,15 @@
+// Cloudflare Workers deploy for the Fitlog web app (static assets, no server code).
+{
+  // Must match the Worker's name in the Cloudflare dashboard.
+  "name": "fitlogmartijn",
+  "compatibility_date": "2026-11-09",
+  // Builds the web app into dist/ before every deploy.
+  "build": {
+    "command": "npx expo export --platform web"
+  },
+  "assets": {
+    "directory": "dist",
+    // Serve index.html for app routes such as /coach (Expo Router is a single-page app).
+    "not_found_handling": "single-page-application"
+  }
+}

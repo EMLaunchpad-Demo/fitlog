@@ -44,3 +44,6 @@ example
 
 # E2E screenshots
 e2e/screenshots/
+
+# Cloudflare Wrangler
+.wrangler/

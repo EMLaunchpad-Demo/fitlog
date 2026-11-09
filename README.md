@@ -65,26 +65,30 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 Fitlog werkt ook als web-app die je op je beginscherm zet: volledig scherm, eigen icoon, start
 ook zonder internet. Je hebt geen Apple Developer-account of Mac nodig.
 
-1. Bouw de web-versie (of gebruik de kant-en-klare map `dist`):
+1. Hosting gebeurt gratis op **Cloudflare Workers**, gekoppeld aan deze GitHub-repo. Elke push
+   naar `main` bouwt en publiceert de app automatisch. De instellingen staan in `wrangler.jsonc`:
+   - `build.command` bouwt de web-app naar `dist/` (`npx expo export --platform web`);
+   - `assets.not_found_handling: "single-page-application"` serveert `index.html` voor
+     app-pagina's zoals `/coach`.
 
-   ```bash
-   npm install
-   npx expo export --platform web
-   ```
+   Eenmalig in Cloudflare: Workers & Pages → Create → koppel de GitHub-repo. De naam in
+   `wrangler.jsonc` moet gelijk zijn aan de naam van de Worker.
+2. Open het adres van je Worker (`….workers.dev`) op je iPhone in **Safari** → deelknop →
+   **Zet op beginscherm**.
+3. Open Fitlog vanaf je beginscherm en vul bij de coach je API-key en profiel in.
 
-2. Zet de map `dist` gratis online, bijvoorbeeld:
-   - **Netlify Drop:** sleep de map `dist` naar app.netlify.com/drop en maak een gratis account
-     zodat de site blijft staan;
-   - **Expo Hosting:** `npx eas-cli@latest deploy --prod` (gratis Expo-account).
-3. Open de link op je iPhone in **Safari** → deelknop → **Zet op beginscherm**.
-4. Open Fitlog vanaf je beginscherm en vul bij de coach je API-key en profiel in.
+Lokaal testen zoals op Cloudflare: `npx wrangler dev`, en dan de web-app-test met
+`BASE_URL=http://localhost:8787 node e2e/web-build.e2e.js`.
 
 Goed om te weten:
 - Je gegevens staan in de opslag van de web-app op je iPhone. Maak af en toe een back-up via
   Instellingen (tandwiel op Vandaag) → **Back-up maken** en bewaar hem in Bestanden.
 - In de web-app bewaart iOS de API-key in de app-opslag, niet in de sleutelhanger.
 - Trillen bij afvinken werkt niet in de web-versie; de rest wel, ook camera en coach.
-- Een nieuwe versie zet je online door stap 1 en 2 opnieuw te doen; de app laadt hem vanzelf.
+- Een nieuwe versie komt online zodra hij op `main` staat; open de app daarna een keer met
+  internet, dan laadt hij de nieuwe versie.
+- Verhuis je naar een ander adres, dan begint de app daar leeg: zet je gegevens over met een
+  back-up (Instellingen → Back-up maken / Back-up terugzetten).
 
 ## Ontwikkelen op je telefoon
 
