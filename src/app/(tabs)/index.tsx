@@ -81,11 +81,7 @@ export default function TodayScreen() {
             color={c.accent}
             onPress={() => router.push('/coach')}
           />
-          <IconButton
-            icon="settings"
-            label="Instellingen"
-            onPress={() => router.push('/goals')}
-          />
+          <IconButton icon="settings" label="Instellingen" onPress={() => router.push('/goals')} />
         </Row>
       }>
       <ActiveWorkoutBanner />
@@ -250,6 +246,14 @@ export default function TodayScreen() {
                   ? ` · ${delta > 0 ? '+' : ''}${num(delta)} kg sinds ${shortDate(parseDateKey(reference!.date))}`
                   : ''}
               </Txt>
+              {latest.composition?.fatPct != null ? (
+                <Txt variant="small">
+                  {num(latest.composition.fatPct, 1)}% vet
+                  {latest.composition.muscleKg != null
+                    ? ` · ${num(latest.composition.muscleKg, 1)} kg spiermassa`
+                    : ''}
+                </Txt>
+              ) : null}
             </View>
             <Sparkline values={lastWeights.map((b) => b.kg)} color={c.accent} />
           </Row>

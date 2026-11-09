@@ -120,8 +120,24 @@ export interface Profile {
   about: string;
 }
 
+/** Body composition from a smart scale. Every value is optional: scales measure different things. */
+export interface BodyComposition {
+  bmi?: number;
+  fatPct?: number;
+  subcutaneousFatPct?: number;
+  visceralFat?: number;
+  muscleKg?: number;
+  skeletalMusclePct?: number;
+  waterPct?: number;
+  boneKg?: number;
+  proteinPct?: number;
+  bmrKcal?: number;
+  metabolicAge?: number;
+}
+
 export interface BodyWeight {
   id: string;
   date: string;
   kg: number;
+  composition?: BodyComposition;
 }

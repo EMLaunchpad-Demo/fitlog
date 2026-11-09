@@ -2,9 +2,11 @@ import type { BetaTool } from '@anthropic-ai/sdk/resources/beta/messages/message
 import type { Href } from 'expo-router';
 
 import { BUILT_IN_EXERCISES, MUSCLE_GROUPS } from '@/data/exercises';
+import { BODY_METRICS, hasComposition } from '@/lib/body';
 import { addDays, dateKey, parseDateKey, relativeDay, uid } from '@/lib/format';
 import { MEALS, mealLabel, sumMacros } from '@/lib/nutrition';
 import type {
+  BodyComposition,
   ExerciseKind,
   Meal,
   MuscleGroup,
@@ -184,10 +186,26 @@ export const TOOLS: BetaTool[] = [
   ),
 
   // ── Gewicht ──
-  tool('log_body_weight', 'Slaat een weging op (vervangt een weging op dezelfde datum).', {
-    kg: { type: 'number' },
-    date: OPT_DATE,
-  }),
+  {
+    name: 'log_body_weight',
+    description:
+      'Slaat een weging op, eventueel met lichaamssamenstelling van een slimme weegschaal (bijv. een Fitdays-screenshot). Vervangt een weging op dezelfde datum. Geef alleen de waarden mee die je echt ziet; laat de rest weg.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        kg: { type: 'number' },
+        date: OPT_DATE,
+        ...Object.fromEntries(
+          BODY_METRICS.map((m) => [
+            m.tool,
+            { type: 'number', description: m.unit ? `${m.label} (${m.unit})` : m.label },
+          ]),
+        ),
+      },
+      required: ['kg', 'date'],
+      additionalProperties: false,
+    },
+  },
   tool('delete_body_weight', 'Verwijdert de weging van een datum.', { date: DATE }),
 
   // ── Schema's ──
@@ -430,12 +448,13 @@ function getOverview() {
     today,
     goals: s.goals,
     nutrition_today: { ...dayTotals(today), water_glasses: s.water[today] ?? 0 },
-    body_weight_weekly_avg: weeklyAverages(s.bodyWeights)
+    body_weight_weekly_avg: weeklyAverages(s.bodyWeights, (b) => b.kg)
       .slice(-8)
       .map((w) => ({ week_of: w.weekStart, avg_kg: w.avg, weigh_ins: w.count })),
     body_weight_last_30_days: s.bodyWeights
       .filter((b) => b.date >= monthAgo)
-      .map((b) => ({ date: b.date, kg: b.kg })),
+      .map((b) => ({ date: b.date, kg: b.kg, fat_pct: b.composition?.fatPct ?? null })),
+    ...bodyCompositionOverview(s.bodyWeights),
     active_plan: plan
       ? {
           id: plan.id,
@@ -455,6 +474,25 @@ function getOverview() {
       volume_kg: Math.round(workoutVolume(w)),
     })),
     workout_in_progress: s.activeWorkout ? s.activeWorkout.name : null,
+  };
+}
+
+/** Latest scale reading and weekly trends of fat % and muscle mass (only when available). */
+function bodyCompositionOverview(entries: Store['bodyWeights']) {
+  const latest = [...entries].reverse().find((b) => hasComposition(b.composition));
+  if (!latest) return {};
+  const weekly = (value: (b: Store['bodyWeights'][number]) => number | undefined) =>
+    weeklyAverages(entries, value)
+      .slice(-8)
+      .map((w) => ({ week_of: w.weekStart, avg: w.avg, n: w.count }));
+  return {
+    latest_body_composition: {
+      date: latest.date,
+      kg: latest.kg,
+      ...snakeComposition(latest.composition),
+    },
+    fat_pct_weekly_avg: weekly((b) => b.composition?.fatPct),
+    muscle_kg_weekly_avg: weekly((b) => b.composition?.muscleKg),
   };
 }
 
@@ -683,11 +721,53 @@ function setGoals(input: Input): Write {
 function logBodyWeight(input: Input): Write {
   const kg = r1(num(input, 'kg', 20, 400));
   const d = date(input, 'date');
-  useStore.getState().logBodyWeight(kg, d);
+  const composition: BodyComposition = {};
+  for (const m of BODY_METRICS) {
+    if (input[m.tool] == null) continue;
+    const factor = 10 ** m.decimals;
+    composition[m.key] = Math.round(num(input, m.tool, m.min, m.max) * factor) / factor;
+  }
+  const store = useStore.getState();
+  const previous = [...store.bodyWeights].reverse().find((b) => b.date < d);
+  store.logBodyWeight(kg, d, hasComposition(composition) ? composition : undefined);
+
+  const parts = [`${fmt(kg)} kg`];
+  if (composition.fatPct != null) parts.push(`${fmt(composition.fatPct)}% vet`);
+  if (composition.muscleKg != null) parts.push(`${fmt(composition.muscleKg)} kg spieren`);
+  const extra =
+    Object.keys(composition).length -
+    (composition.fatPct != null ? 1 : 0) -
+    (composition.muscleKg != null ? 1 : 0);
+  if (extra > 0) parts.push(`+${extra} ${extra === 1 ? 'waarde' : 'waarden'}`);
   return {
-    result: { saved: true, kg, date: d },
-    action: { label: `Gewicht ${String(kg).replace('.', ',')} kg opgeslagen`, link: '/weight' },
+    result: {
+      saved: true,
+      date: d,
+      kg,
+      composition: snakeComposition(composition),
+      previous: previous
+        ? {
+            date: previous.date,
+            kg: previous.kg,
+            composition: snakeComposition(previous.composition),
+          }
+        : null,
+    },
+    action: {
+      label: `Weging ${parts.join(' · ')}${d === dateKey() ? '' : ` (${day(d)})`}`,
+      link: '/weight',
+    },
   };
+}
+
+const fmt = (n: number) => String(n).replace('.', ',');
+
+/** Composition with the tool's snake_case names, for results sent to the coach. */
+function snakeComposition(c?: BodyComposition) {
+  if (!c) return null;
+  const out: Record<string, number> = {};
+  for (const m of BODY_METRICS) if (c[m.key] != null) out[m.tool] = c[m.key]!;
+  return Object.keys(out).length ? out : null;
 }
 
 function deleteBodyWeight(input: Input): Write {

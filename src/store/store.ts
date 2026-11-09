@@ -7,6 +7,7 @@ import { BUILT_IN_FOODS } from '@/data/foods';
 import { PRESET_PLANS } from '@/data/plans';
 import { dateKey, uid } from '@/lib/format';
 import type {
+  BodyComposition,
   BodyWeight,
   Exercise,
   Food,
@@ -95,7 +96,8 @@ interface Actions {
   setGoals: (goals: Partial<Goals>) => void;
 
   // Body weight
-  logBodyWeight: (kg: number, date?: string) => void;
+  /** Replaces the weigh-in of that date; keeps its body composition unless a new one is given. */
+  logBodyWeight: (kg: number, date?: string, composition?: BodyComposition) => void;
   removeBodyWeight: (id: string) => void;
 
   // Profile
@@ -467,13 +469,17 @@ export const useStore = create<Store>()(
       setGoals: (goals) => set((s) => ({ goals: { ...s.goals, ...goals } })),
 
       // ───────────────────────── Body weight ─────────────────────────
-      logBodyWeight: (kg, date = dateKey()) =>
-        set((s) => ({
-          bodyWeights: [
-            ...s.bodyWeights.filter((b) => b.date !== date),
-            { id: uid(), date, kg },
-          ].sort((a, b) => a.date.localeCompare(b.date)),
-        })),
+      logBodyWeight: (kg, date = dateKey(), composition) =>
+        set((s) => {
+          const existing = s.bodyWeights.find((b) => b.date === date);
+          const kept = composition ?? existing?.composition;
+          return {
+            bodyWeights: [
+              ...s.bodyWeights.filter((b) => b.date !== date),
+              { id: uid(), date, kg, ...(kept ? { composition: kept } : {}) },
+            ].sort((a, b) => a.date.localeCompare(b.date)),
+          };
+        }),
 
       setProfile: (profile) => set({ profile }),
 

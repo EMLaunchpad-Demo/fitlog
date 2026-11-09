@@ -14,7 +14,7 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 - Kan alles in de app voor je aanpassen:
   - schema's: maken, aanpassen ("vervang bankdrukken door halters"), activeren, verwijderen
   - voeding: loggen, gelogde items corrigeren of verwijderen, water, doelen
-  - gewicht: wegingen toevoegen of verwijderen
+  - gewicht: wegingen toevoegen (ook vanaf een weegschaal-screenshot, met alle waarden) of verwijderen
   - trainingen: achteraf vastleggen ("gisteren 5 km gelopen") of verwijderen
   - je profiel ("onthoud dat ik last heb van mijn knie")
 - Elke actie verschijnt als kaartje in de chat; tik erop om het resultaat te zien
@@ -32,6 +32,9 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 - Weekoverzicht (ma–zo) en een streak van weken op rij
 - Calorieën en macro's van vandaag, water, en je lichaamsgewicht met trendlijn
 - Weekgemiddelde gewicht met het verschil ten opzichte van vorige week
+- Lichaamssamenstelling van een slimme weegschaal (vet%, spiermassa, lichaamswater, visceraal
+  vet, BMR, …): stuur een screenshot uit bijvoorbeeld Fitdays naar de coach of vul de waarden
+  zelf in; met weekgemiddelden en een grafiek per waarde
 
 **Trainen**
 - Sets loggen per oefening: kg × reps, lichaamsgewicht (+kg), tijd (plank) of cardio (km/min)
