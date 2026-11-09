@@ -32,4 +32,10 @@ Productie-build:
 npm run test:web-build
 ```
 
+Tegen de Cloudflare-runtime (in een tweede terminal `npx wrangler dev`):
+
+```bash
+BASE_URL=http://localhost:8787 node e2e/web-build.e2e.js
+```
+
 Screenshots komen in `e2e/screenshots/` (staat in `.gitignore`).

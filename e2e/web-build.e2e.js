@@ -8,7 +8,8 @@ const { chromium, devices } = require('playwright');
 
 const DIST = path.resolve(process.argv[2] || path.join(__dirname, '..', 'dist'));
 const PORT = 4173;
-const BASE = `http://localhost:${PORT}`;
+// BASE_URL tests an already running server instead (e.g. `npx wrangler dev`).
+const BASE = process.env.BASE_URL || `http://localhost:${PORT}`;
 const OUT = path.join(__dirname, 'screenshots');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.css': 'text/css' };
 
@@ -23,7 +24,7 @@ const server = http.createServer((req, res) => {
 
 (async () => {
   require('fs').mkdirSync(OUT, { recursive: true });
-  await new Promise((r) => server.listen(PORT, r));
+  if (!process.env.BASE_URL) await new Promise((r) => server.listen(PORT, r));
   const browser = await chromium.launch();
   const { defaultBrowserType, ...iphone } = devices['iPhone 13 Pro'];
   const ctx = await browser.newContext({ ...iphone, acceptDownloads: true });
@@ -126,9 +127,9 @@ const server = http.createServer((req, res) => {
 
   console.log('errors:', errors.length ? [...new Set(errors)].slice(0, 10) : 'none');
   await browser.close();
-  server.close();
+  if (server.listening) server.close();
 })().catch((e) => {
   console.error('FAILED:', e.message);
-  server.close();
+  if (server.listening) server.close();
   process.exit(1);
 });
