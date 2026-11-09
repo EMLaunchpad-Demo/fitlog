@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# E2E screenshots
+e2e/screenshots/
