@@ -86,7 +86,7 @@ function useChatItems(): Item[] {
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ attach?: ImageSource }>();
+  const params = useLocalSearchParams<{ attach?: ImageSource; text?: string }>();
   const items = useChatItems();
   const busy = useCoach((s) => s.busy);
   const activity = useCoach((s) => s.activity);
@@ -101,7 +101,10 @@ export default function CoachScreen() {
   const coachUpdated = useCoachUpdated();
 
   const [hasKey, setHasKey] = useState<boolean | null>(null);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(params.text ?? '');
+  // Browsers only open a file/camera picker straight from a tap, so on the web
+  // ?attach= shows a button instead of opening the picker automatically.
+  const [attachPrompt, setAttachPrompt] = useState(Platform.OS === 'web' && !!params.attach);
   const [pending, setPending] = useState<string[]>([]);
   const [picking, setPicking] = useState(false);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -130,9 +133,9 @@ export default function CoachScreen() {
     }
   }, []);
 
-  // Opened with ?attach=camera from "Maaltijd fotograferen".
+  // Opened with ?attach=… (e.g. "Foto maken" on Voeding): open the picker right away on iOS/Android.
   useEffect(() => {
-    if (hasKey && params.attach && !autoAttachDone.current) {
+    if (Platform.OS !== 'web' && hasKey && params.attach && !autoAttachDone.current) {
       autoAttachDone.current = true;
       attach(params.attach);
     }
@@ -143,7 +146,7 @@ export default function CoachScreen() {
     const imageIds = pending;
     setText('');
     setPending([]);
-    sendToCoach(value || 'Log deze maaltijd.', imageIds);
+    sendToCoach(value || 'Log wat je op deze foto ziet.', imageIds);
   };
 
   const startNew = async () => {
@@ -334,6 +337,19 @@ export default function CoachScreen() {
             </Txt>
           ) : null}
         </ScrollView>
+
+        {attachPrompt && hasKey && params.attach && !pending.length ? (
+          <View style={{ paddingHorizontal: space.lg, paddingTop: space.sm }}>
+            <Button
+              label={params.attach === 'camera' ? 'Maak een foto' : 'Kies een foto of screenshot'}
+              icon={params.attach === 'camera' ? 'camera' : 'image'}
+              onPress={() => {
+                setAttachPrompt(false);
+                attach(params.attach!);
+              }}
+            />
+          </View>
+        ) : null}
 
         {pending.length ? (
           <ScrollView

@@ -44,6 +44,14 @@ function respond(body) {
   const data = results.length && !results[0].is_error ? JSON.parse(results[0].content) : null;
   if (results.length && results[0].is_error) return say(`Fout van tool: ${results[0].content}`);
 
+  if (intent.includes('weging van mijn weegschaal')) {
+    if (!lastTool) {
+      const hasImage = typeof last.content !== 'string' && last.content.some((b) => b.type === 'image');
+      if (!hasImage) return say('Ik zie geen foto.');
+      return call('log_body_weight', { kg: 72.4, date: null, fat_pct: 18.2, muscle_kg: 56.1, water_pct: 55.3, visceral_fat: 6, bmr_kcal: 1720 });
+    }
+    return say('Weging met lichaamssamenstelling gelogd.');
+  }
   if (intent.includes('vervang bankdrukken')) {
     if (!lastTool) return call('get_plans', {});
     if (lastTool === 'get_plans') {
@@ -231,6 +239,52 @@ const yesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); retu
   await send('Hoi', 'Prima!');
   assert.strictEqual(requests[count].messages.length, 1, 'fresh conversation after app update');
   console.log('app update -> new conversation ok');
+
+  // 9b. Scale screenshot from the weight screen (web: picker opens from a tap).
+  const jpg = path.join(__dirname, 'meal.jpg');
+  await page.goto(BASE + '/weight');
+  await v(page.getByText('Screenshot van je weegschaal')).click();
+  await v(page.getByText('Kies een foto of screenshot')).waitFor({ timeout: 15000 });
+  assert.strictEqual(
+    await v(page.getByLabel('Bericht aan de coach')).inputValue(),
+    'Log deze weging van mijn weegschaal.',
+    'message prefilled',
+  );
+  const [scaleChooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    v(page.getByText('Kies een foto of screenshot')).click(),
+  ]);
+  await scaleChooser.setFiles(jpg);
+  await v(page.getByLabel('Foto verwijderen')).waitFor({ timeout: 15000 });
+  await v(page.getByLabel('Versturen')).click();
+  await v(page.getByText('Weging met lichaamssamenstelling gelogd.')).waitFor({ timeout: 15000 });
+  await v(page.getByText(/Weging 72,4 kg · 18,2% vet · 56,1 kg spieren · \+3 waarden/)).waitFor();
+  s = await store();
+  const scale = s.bodyWeights[s.bodyWeights.length - 1];
+  assert.deepStrictEqual(scale.composition, { fatPct: 18.2, muscleKg: 56.1, waterPct: 55.3, visceralFat: 6, bmrKcal: 1720 });
+  await page.goto(BASE + '/weight');
+  await v(page.getByText('Lichaamssamenstelling', { exact: true })).waitFor();
+  await v(page.getByText('Visceraal vet')).waitFor();
+  await page.screenshot({ path: path.join(OUT, 'actions-04-weight-composition.png'), fullPage: false });
+  console.log('scale screenshot -> body composition ok');
+
+  // 9c. Manual body composition on the weight screen keeps working.
+  await v(page.getByText('Lichaamssamenstelling (optioneel)')).click();
+  await v(page.getByLabel('Vetpercentage (%)')).fill('18,0');
+  await v(page.getByText('Opslaan', { exact: true })).click();
+  s = await store();
+  assert.strictEqual(s.bodyWeights[s.bodyWeights.length - 1].composition.fatPct, 18, 'manual fat %');
+  assert.strictEqual(s.bodyWeights[s.bodyWeights.length - 1].composition.muscleKg, 56.1, 'other values kept');
+  console.log('manual composition ok');
+
+  // 9d. "Foto maken" on Voeding offers a tap-to-open camera button on the web.
+  await page.goto(BASE + '/food');
+  await v(page.getByText('Foto maken')).click();
+  await v(page.getByText('Maak een foto')).waitFor({ timeout: 15000 });
+  const [cam] = await Promise.all([page.waitForEvent('filechooser'), v(page.getByText('Maak een foto')).click()]);
+  assert.ok(cam, 'camera picker opens from the button');
+  await page.goto(BASE + '/coach');
+  console.log('food photo button ok');
 
   // 10. Hidden API limit: strict schemas rejected -> app retries without strict, and stays non-strict.
   await v(page.getByLabel('Nieuw gesprek')).click();

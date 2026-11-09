@@ -146,16 +146,19 @@ export function personalRecords(
   return records;
 }
 
-/** Average body weight per week (Monday start), oldest first. */
-export function weeklyAverages(
-  entries: { date: string; kg: number }[],
+/** Weekly average of a value (Monday start), oldest first. Entries without a value are skipped. */
+export function weeklyAverages<T extends { date: string }>(
+  entries: T[],
+  value: (entry: T) => number | null | undefined,
 ): { weekStart: string; avg: number; count: number }[] {
   const weeks = new Map<string, number[]>();
   for (const e of entries) {
+    const v = value(e);
+    if (v == null || !Number.isFinite(v)) continue;
     const [y, m, d] = e.date.split('-').map(Number);
     const monday = startOfWeek(new Date(y, m - 1, d));
     const key = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
-    weeks.set(key, [...(weeks.get(key) ?? []), e.kg]);
+    weeks.set(key, [...(weeks.get(key) ?? []), v]);
   }
   return [...weeks.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
