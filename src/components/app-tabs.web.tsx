@@ -3,19 +3,30 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/icon';
-import { useColors } from '@/lib/theme';
+import { glass, useColors } from '@/lib/theme';
 
-/** Web fallback: a bottom tab bar that mimics the native one. */
+/**
+ * Web fallback: a floating frosted-glass tab bar. Screens scroll underneath it
+ * (TabScreen leaves room at the bottom), so the blur has content to work on.
+ */
 export default function AppTabs() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   return (
     <Tabs>
       <TabSlot style={{ flex: 1 }} />
+      {/* TabList must stay a direct child of Tabs: that is where the triggers are read from. */}
       <TabList
         style={[
           styles.bar,
-          { backgroundColor: c.card, borderTopColor: c.border, paddingBottom: insets.bottom + 6 },
+          glass(c, 'strong'),
+          {
+            bottom: Math.max(insets.bottom, 10),
+            shadowColor: c.shadow,
+            shadowOpacity: 1,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: 8 },
+          },
         ]}>
         <TabTrigger name="index" href="/" asChild>
           <TabButton icon="home" label="Vandaag" />
@@ -56,9 +67,15 @@ function TabButton({
 
 const styles = StyleSheet.create({
   bar: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    // Centres the bar once maxWidth kicks in (wide screens).
+    marginHorizontal: 'auto',
+    maxWidth: 520,
     flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 6,
+    borderRadius: 28,
+    paddingVertical: 8,
   },
   tab: { flex: 1, alignItems: 'center', gap: 2 },
   pill: { width: 56, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },

@@ -5,6 +5,7 @@ import { FlatList, Pressable, ScrollView, View } from 'react-native';
 import { Icon } from '@/components/icon';
 import { Button, Card, Chip, Field, HeaderButton, Row, Segmented, Txt, tap } from '@/components/ui';
 import { BUILT_IN_EXERCISES, MUSCLE_GROUPS } from '@/data/exercises';
+import { AppBackground } from '@/components/background';
 import { space, useColors } from '@/lib/theme';
 import type { Exercise, ExerciseKind, MuscleGroup } from '@/lib/types';
 import { exerciseHistory } from '@/lib/workout-stats';
@@ -80,6 +81,7 @@ export default function ExercisePicker() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <AppBackground />
       <Stack.Screen
         options={{
           title: mode === 'browse' ? 'Oefeningen' : 'Kies oefeningen',

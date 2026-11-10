@@ -164,9 +164,9 @@ src/
     coach.tsx          AI-coach (chat)
     coach-settings.tsx API-key, model en verbruik
   ai/                  Claude-client, agent-loop, tools, systeemprompt, foto's, key-opslag
-  components/          UI-bouwstenen, grafieken, tab bar
+  components/          UI-bouwstenen, grafieken, tab bar, achtergrond (groen glass-thema)
   data/                ingebouwde oefeningen, voedingsmiddelen en schema's
-  lib/                 types, formattering (NL), statistieken, thema
+  lib/                 types, formattering (NL), statistieken, thema (kleuren + glass())
   store/store.ts       alle data en acties (zustand, bewaard in AsyncStorage)
 ```
 

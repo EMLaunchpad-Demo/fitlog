@@ -1,4 +1,5 @@
 import { NativeTabs } from 'expo-router/native-tabs';
+import { Platform } from 'react-native';
 
 import { useColors } from '@/lib/theme';
 
@@ -6,7 +7,8 @@ export default function AppTabs() {
   const c = useColors();
   return (
     <NativeTabs
-      backgroundColor={c.card}
+      // iOS: leave the bar to the system (Liquid Glass on iOS 26). Android: a solid green-tinted bar.
+      backgroundColor={Platform.OS === 'ios' ? undefined : c.bgTop}
       indicatorColor={c.accentSoft}
       tintColor={c.accent}
       labelStyle={{ selected: { color: c.accent } }}

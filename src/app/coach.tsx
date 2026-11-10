@@ -23,7 +23,8 @@ import { getApiKey } from '@/ai/key';
 import { WRITE_TOOLS, type ToolAction } from '@/ai/tools';
 import { Icon } from '@/components/icon';
 import { Button, Card, IconButton, Row, Txt, confirm, notify, tap } from '@/components/ui';
-import { radius, space, useColors } from '@/lib/theme';
+import { AppBackground } from '@/components/background';
+import { glass, radius, space, useColors } from '@/lib/theme';
 import { useStore } from '@/store/store';
 
 const SUGGESTIONS = [
@@ -165,6 +166,7 @@ export default function CoachScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <AppBackground />
       <Stack.Screen
         options={{
           title: 'Coach',
@@ -379,9 +381,11 @@ export default function CoachScreen() {
         <View
           style={[
             styles.inputBar,
+            glass(c, 'strong'),
             {
-              borderTopColor: c.border,
-              backgroundColor: c.bg,
+              borderWidth: 0,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: c.divider,
               paddingBottom: Math.max(insets.bottom, space.sm),
             },
           ]}>
@@ -426,7 +430,7 @@ export default function CoachScreen() {
             style={{
               textAlign: 'center',
               paddingBottom: 4,
-              backgroundColor: c.bg,
+              backgroundColor: c.cardStrong,
             }}>
             Dit gesprek ≈ $
             {conversationCost.toFixed(conversationCost < 0.1 ? 3 : 2).replace('.', ',')}
