@@ -58,7 +58,7 @@ export function LineChart({
               x2={padLeft + innerW}
               y1={y}
               y2={y}
-              stroke={c.border}
+              stroke={c.divider}
               strokeDasharray="4 4"
             />
           ))}

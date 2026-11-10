@@ -22,6 +22,7 @@ import {
 } from '@/components/ui';
 import { clock, longDate } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
+import { AppBackground } from '@/components/background';
 import { radius, space, useColors } from '@/lib/theme';
 import type { Exercise, WorkoutExercise, WorkoutSet } from '@/lib/types';
 import { previousSets, setLabel, targetNumber } from '@/lib/workout-stats';
@@ -89,6 +90,7 @@ export default function WorkoutScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <AppBackground />
       <Stack.Screen
         options={{
           title: workout ? clock((now - workout.startedAt) / 1000) : 'Training',
@@ -132,7 +134,7 @@ export default function WorkoutScreen() {
           action={<Button label="Terug" variant="secondary" onPress={close} />}
         />
       ) : (
-        <StackScroll contentContainerStyle={{ paddingBottom: rest ? 200 : 80 }}>
+        <StackScroll background={false} contentContainerStyle={{ paddingBottom: rest ? 200 : 80 }}>
           <View style={{ gap: 2 }}>
             <TextInput
               value={workout.name}

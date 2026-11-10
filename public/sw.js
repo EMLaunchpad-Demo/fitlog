@@ -2,11 +2,15 @@
  *
  * - Pages: network first, so a new version shows up as soon as you're online;
  *   offline it falls back to the cached app shell.
- * - Scripts, fonts and images from this site: cache first. Their file names
- *   contain a content hash, so a cached copy never goes stale.
+ * - Bundled scripts, fonts and images (/_expo/, /assets/): cache first. Their
+ *   file names contain a content hash, so a cached copy never goes stale.
+ * - Other files (manifest, icons): network first, cache as offline fallback,
+ *   so a new icon or theme colour shows up.
  * - Requests to other sites (the Claude API) are never touched.
+ *
+ * Bump CACHE when the caching rules change; old caches are deleted on activate.
  */
-const CACHE = 'fitlog-v1';
+const CACHE = 'fitlog-v2';
 const SHELL = ['/', '/manifest.json', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {
@@ -45,17 +49,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then(
-      (cached) =>
-        cached ||
-        fetch(request).then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        }),
-    ),
-  );
+  const store = (response) => {
+    if (response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(request, copy));
+    }
+    return response;
+  };
+
+  const hashed = url.pathname.startsWith('/_expo/') || url.pathname.startsWith('/assets/');
+  if (hashed) {
+    event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then(store)));
+    return;
+  }
+
+  event.respondWith(fetch(request).then(store).catch(() => caches.match(request)));
 });

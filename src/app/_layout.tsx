@@ -38,7 +38,7 @@ export default function RootLayout() {
       ...base.colors,
       primary: c.accent,
       background: c.bg,
-      card: c.bg,
+      card: c.bgTop,
       text: c.text,
       border: c.border,
     },
@@ -51,7 +51,8 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             contentStyle: { backgroundColor: c.bg },
-            headerStyle: { backgroundColor: c.bg },
+            // Matches the top of the green background gradient, so header and screen blend.
+            headerStyle: { backgroundColor: c.bgTop },
             headerTintColor: c.accent,
             headerTitleStyle: { color: c.text, fontWeight: '700' },
             headerShadowVisible: false,

@@ -20,7 +20,8 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { Icon, type IconName } from '@/components/icon';
 import { parseNum } from '@/lib/format';
-import { radius, space, useColors } from '@/lib/theme';
+import { AppBackground } from '@/components/background';
+import { glass, radius, space, useColors } from '@/lib/theme';
 
 // ───────────────────────── Feedback helpers ─────────────────────────
 
@@ -105,36 +106,47 @@ export function TabScreen({
   // iOS native tabs adjust the first ScrollView's insets automatically.
   const top = Platform.OS === 'ios' ? space.sm : insets.top + space.lg;
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: c.bg }}
-      contentInsetAdjustmentBehavior="automatic"
-      automaticallyAdjustKeyboardInsets
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{
-        paddingTop: top,
-        paddingHorizontal: space.lg,
-        paddingBottom: 120,
-        gap: space.lg,
-      }}
-      {...scrollProps}>
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          {subtitle ? <Txt variant="label">{subtitle}</Txt> : null}
-          <Txt variant="title">{title}</Txt>
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <AppBackground />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="automatic"
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{
+          paddingTop: top,
+          paddingHorizontal: space.lg,
+          paddingBottom: 120,
+          gap: space.lg,
+        }}
+        {...scrollProps}>
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            {subtitle ? <Txt variant="label">{subtitle}</Txt> : null}
+            <Txt variant="title">{title}</Txt>
+          </View>
+          {right}
         </View>
-        {right}
-      </View>
-      {children}
-    </ScrollView>
+        {children}
+      </ScrollView>
+    </View>
   );
 }
 
 /** Scrollable body for stack screens (header provided by the Stack). */
-export function StackScroll({ children, contentContainerStyle, ...props }: ScrollViewProps) {
+export function StackScroll({
+  children,
+  contentContainerStyle,
+  background = true,
+  ...props
+}: ScrollViewProps & {
+  /** Draw the app background (off when the screen already draws it). */
+  background?: boolean;
+}) {
   const c = useColors();
-  return (
+  const scroll = (
     <ScrollView
-      style={{ flex: 1, backgroundColor: c.bg }}
+      style={{ flex: 1 }}
       contentInsetAdjustmentBehavior="automatic"
       automaticallyAdjustKeyboardInsets
       keyboardShouldPersistTaps="handled"
@@ -145,6 +157,13 @@ export function StackScroll({ children, contentContainerStyle, ...props }: Scrol
       {...props}>
       {children}
     </ScrollView>
+  );
+  if (!background) return scroll;
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <AppBackground />
+      {scroll}
+    </View>
   );
 }
 
@@ -160,13 +179,23 @@ export function Card({
   tone?: 'card' | 'accent' | 'alt';
 }) {
   const c = useColors();
-  const bg = tone === 'accent' ? c.accent : tone === 'alt' ? c.cardAlt : c.card;
+  const surface: ViewStyle =
+    tone === 'accent'
+      ? { backgroundColor: c.accent, shadowColor: c.accent, shadowOpacity: 0.35, shadowRadius: 18 }
+      : tone === 'alt'
+        ? {
+            backgroundColor: c.cardAlt,
+            borderColor: c.border,
+            borderWidth: StyleSheet.hairlineWidth,
+          }
+        : { ...glass(c), shadowColor: c.shadow, shadowOpacity: 1, shadowRadius: 24 };
   const content = (pressed: boolean) => (
     <View
       style={[
         styles.card,
-        { backgroundColor: bg, opacity: pressed ? 0.85 : 1 },
-        tone === 'card' && { borderColor: c.border, borderWidth: StyleSheet.hairlineWidth },
+        { shadowOffset: { width: 0, height: 8 } },
+        surface,
+        { opacity: pressed ? 0.85 : 1 },
         style,
       ]}>
       {children}
@@ -249,6 +278,17 @@ export function Button({
           paddingHorizontal: size === 'sm' ? space.md : space.lg,
           opacity: disabled ? 0.4 : pressed ? 0.8 : 1,
         },
+        variant === 'primary' && !disabled
+          ? {
+              shadowColor: c.accent,
+              shadowOpacity: 0.35,
+              shadowRadius: 14,
+              shadowOffset: { width: 0, height: 6 },
+            }
+          : null,
+        variant === 'secondary'
+          ? { borderColor: c.border, borderWidth: StyleSheet.hairlineWidth * 2 }
+          : null,
         style,
       ]}>
       {icon ? <Icon name={icon} size={size === 'sm' ? 15 : 18} color={fg} /> : null}
@@ -326,11 +366,12 @@ export function Chip({
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? c.text : c.card,
-          borderColor: selected ? c.text : c.border,
+          ...(selected ? {} : glass(c)),
+          backgroundColor: selected ? c.accent : c.card,
+          borderColor: selected ? c.accent : c.border,
         },
       ]}>
-      <Text style={{ color: selected ? c.bg : c.text, fontWeight: '600', fontSize: 14 }}>
+      <Text style={{ color: selected ? c.onAccent : c.text, fontWeight: '600', fontSize: 14 }}>
         {label}
       </Text>
     </Pressable>
@@ -348,7 +389,15 @@ export function Segmented<T extends string>({
 }) {
   const c = useColors();
   return (
-    <View style={[styles.segmented, { backgroundColor: c.cardAlt }]}>
+    <View
+      style={[
+        styles.segmented,
+        {
+          backgroundColor: c.cardAlt,
+          borderColor: c.border,
+          borderWidth: StyleSheet.hairlineWidth * 2,
+        },
+      ]}>
       {options.map((o) => {
         const active = o.key === value;
         return (
@@ -656,7 +705,7 @@ export function ListRow({
 
 export function Divider() {
   const c = useColors();
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border }} />;
+  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.divider }} />;
 }
 
 const styles = StyleSheet.create({
