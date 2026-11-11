@@ -19,7 +19,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Icon, type IconName } from '@/components/icon';
-import { parseNum } from '@/lib/format';
+import { dutchDate, parseDutchDate, parseNum } from '@/lib/format';
+import { formatTime, normalizeTime, parseTime } from '@/lib/time';
 import { AppBackground } from '@/components/background';
 import { glass, radius, space, useColors } from '@/lib/theme';
 
@@ -181,23 +182,29 @@ export function Card({
   const c = useColors();
   const surface: ViewStyle =
     tone === 'accent'
-      ? { backgroundColor: c.accent, shadowColor: c.accent, shadowOpacity: 0.35, shadowRadius: 18 }
+      ? {
+          backgroundColor: c.accent,
+          shadowColor: c.accent,
+          shadowOpacity: 0.35,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 8 },
+        }
       : tone === 'alt'
         ? {
             backgroundColor: c.cardAlt,
             borderColor: c.border,
             borderWidth: StyleSheet.hairlineWidth,
           }
-        : { ...glass(c), shadowColor: c.shadow, shadowOpacity: 1, shadowRadius: 24 };
+        : {
+            ...glass(c),
+            shadowColor: c.shadow,
+            shadowOpacity: 1,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: 8 },
+          };
   const content = (pressed: boolean) => (
     <View
-      style={[
-        styles.card,
-        { shadowOffset: { width: 0, height: 8 } },
-        surface,
-        { opacity: pressed ? 0.85 : 1 },
-        style,
-      ]}>
+      style={[styles.card, surface, { opacity: pressed ? 0.85 : 1 }, style]}>
       {children}
     </View>
   );
@@ -540,16 +547,19 @@ export function ProgressBar({
   color,
   height = 8,
   trackColor,
+  cap,
 }: {
   value: number;
   max: number;
   color: string;
   height?: number;
   trackColor?: string;
+  /** Going over the maximum is fine (steps, sleep): never turn red. */
+  cap?: boolean;
 }) {
   const c = useColors();
   const pct = max > 0 ? Math.min(1, value / max) : 0;
-  const over = max > 0 && value > max * 1.05;
+  const over = !cap && max > 0 && value > max * 1.05;
   return (
     <View
       style={{
@@ -700,6 +710,262 @@ export function ListRow({
       </View>
       {right ?? (onPress ? <Icon name="chevronRight" size={14} color={c.textFaint} /> : null)}
     </Pressable>
+  );
+}
+
+/**
+ * Clock time ("22:15") with −/+ 15 minute buttons. Typing accepts "2215",
+ * "22.15" or "22u15"; anything invalid falls back to the last valid time.
+ */
+export function TimeField({
+  label,
+  value,
+  onChange,
+  step = 15,
+}: {
+  label: string;
+  value: string;
+  onChange: (time: string) => void;
+  step?: number;
+}) {
+  const c = useColors();
+  const [text, setText] = useState(value);
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setText(value);
+  }
+  const commit = (raw: string) => {
+    const t = normalizeTime(raw);
+    if (t) {
+      setLastValue(t);
+      setText(t);
+      if (t !== value) onChange(t);
+    } else setText(value);
+  };
+  const nudge = (delta: number) => {
+    const base = parseTime(text) ?? parseTime(value) ?? 0;
+    // Snap to the step first, so 22:07 + 15 becomes 22:15 rather than 22:22.
+    const snapped = delta > 0 ? Math.floor(base / step) * step : Math.ceil(base / step) * step;
+    commit(formatTime(snapped + delta));
+  };
+  return (
+    <View style={{ gap: space.xs, flexGrow: 1, flexShrink: 1 }}>
+      <Txt variant="small">{label}</Txt>
+      <Row gap={space.xs}>
+        <IconButton icon="minus" label={`${label} eerder`} size={34} onPress={() => nudge(-step)} />
+        <TextInput
+          value={text}
+          accessibilityLabel={label}
+          inputMode="numeric"
+          keyboardType="numbers-and-punctuation"
+          selectTextOnFocus
+          maxLength={5}
+          onChangeText={setText}
+          onBlur={() => commit(text)}
+          onSubmitEditing={() => commit(text)}
+          style={[
+            styles.field,
+            {
+              flex: 1,
+              minWidth: 66,
+              paddingHorizontal: 2,
+              backgroundColor: c.input,
+              color: c.text,
+              textAlign: 'center',
+              fontVariant: ['tabular-nums'],
+              fontWeight: '700',
+              fontSize: 18,
+            },
+          ]}
+        />
+        <IconButton icon="plus" label={`${label} later`} size={34} onPress={() => nudge(step)} />
+      </Row>
+    </View>
+  );
+}
+
+/** Date as "12-10-2026". Empty is allowed when `optional`; invalid input falls back to the last value. */
+export function DateField({
+  label,
+  value,
+  onChange,
+  optional,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (date: string | null) => void;
+  optional?: boolean;
+}) {
+  const c = useColors();
+  const shown = value ? dutchDate(value) : '';
+  const [text, setText] = useState(shown);
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setText(shown);
+  }
+  const commit = () => {
+    if (!text.trim() && optional) {
+      setLastValue(null);
+      if (value !== null) onChange(null);
+      return;
+    }
+    const parsed = parseDutchDate(text);
+    if (!parsed) return setText(shown);
+    setLastValue(parsed);
+    setText(dutchDate(parsed));
+    if (parsed !== value) onChange(parsed);
+  };
+  return (
+    <View style={{ gap: space.xs, flexGrow: 1, flexShrink: 1 }}>
+      <Txt variant="small">{label}</Txt>
+      <TextInput
+        value={text}
+        accessibilityLabel={label}
+        placeholder={optional ? 'geen' : 'dd-mm-jjjj'}
+        placeholderTextColor={c.textFaint}
+        keyboardType="numbers-and-punctuation"
+        maxLength={10}
+        onChangeText={setText}
+        onBlur={commit}
+        onSubmitEditing={commit}
+        style={[
+          styles.field,
+          { backgroundColor: c.input, color: c.text, fontVariant: ['tabular-nums'] },
+        ]}
+      />
+    </View>
+  );
+}
+
+/** A 1–5 score picker; 1 is always the worst and 5 the best. */
+export function Rating({
+  label,
+  value,
+  onChange,
+  low,
+  high,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (v: number) => void;
+  /** What 1 and 5 mean, e.g. "leeg" and "vol energie" */
+  low: string;
+  high: string;
+}) {
+  const c = useColors();
+  return (
+    <View style={{ gap: space.xs }}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Txt variant="h3" style={{ fontSize: 15 }}>
+          {label}
+        </Txt>
+        <Txt variant="small">
+          {low} → {high}
+        </Txt>
+      </Row>
+      <Row gap={space.sm}>
+        {[1, 2, 3, 4, 5].map((n) => {
+          const selected = value === n;
+          return (
+            <Pressable
+              key={n}
+              accessibilityRole="button"
+              accessibilityLabel={`${label} ${n}`}
+              accessibilityState={{ selected }}
+              onPress={() => {
+                tap();
+                onChange(n);
+              }}
+              style={{
+                flex: 1,
+                height: 42,
+                borderRadius: radius.sm,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: selected ? c.accent : c.input,
+              }}>
+              <Text
+                style={{
+                  color: selected ? c.onAccent : c.text,
+                  fontWeight: '700',
+                  fontSize: 16,
+                  fontVariant: ['tabular-nums'],
+                }}>
+                {n}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </Row>
+    </View>
+  );
+}
+
+/** Small tappable metric tile for dashboards (two per row). */
+export function Tile({
+  icon,
+  label,
+  value,
+  unit,
+  detail,
+  color,
+  progress,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  unit?: string;
+  detail?: string;
+  color?: string;
+  /** 0–1; draws a bar under the value */
+  progress?: number;
+  onPress?: () => void;
+}) {
+  const c = useColors();
+  const tint = color ?? c.accent;
+  return (
+    <View style={{ flexBasis: '47%', flexGrow: 1 }}>
+      <Card onPress={onPress} style={{ gap: space.sm, padding: space.md }}>
+        <Row gap={6}>
+          <Icon name={icon} size={14} color={tint} />
+          <Txt variant="label" numberOfLines={1} style={{ flex: 1 }}>
+            {label}
+          </Txt>
+        </Row>
+        <Row gap={4} style={{ alignItems: 'baseline' }}>
+          <Txt variant="h2" numberOfLines={1} style={{ fontVariant: ['tabular-nums'] }}>
+            {value}
+          </Txt>
+          {unit ? <Txt variant="small">{unit}</Txt> : null}
+        </Row>
+        {progress != null ? (
+          <ProgressBar value={progress} max={1} color={tint} height={6} cap />
+        ) : null}
+        {detail ? (
+          <Txt variant="small" numberOfLines={1}>
+            {detail}
+          </Txt>
+        ) : null}
+      </Card>
+    </View>
+  );
+}
+
+/** Short explanation with an info icon, for the "why" behind a number. */
+export function Note({ children }: { children: ReactNode }) {
+  const c = useColors();
+  return (
+    <Row gap={space.sm} style={{ alignItems: 'flex-start' }}>
+      <View style={{ marginTop: 1 }}>
+        <Icon name="info" size={14} color={c.textFaint} />
+      </View>
+      <Txt variant="small" style={{ flex: 1 }}>
+        {children}
+      </Txt>
+    </Row>
   );
 }
 

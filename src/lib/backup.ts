@@ -1,7 +1,7 @@
 import { Platform, Share } from 'react-native';
 
 import { dateKey } from '@/lib/format';
-import { type Store, useStore } from '@/store/store';
+import { type Store, completeSettings, useStore } from '@/store/store';
 
 /** Everything the user logged or configured. The API key is never included. */
 const DATA_KEYS = [
@@ -17,6 +17,13 @@ const DATA_KEYS = [
   'goals',
   'bodyWeights',
   'profile',
+  'sleepLog',
+  'cardioLog',
+  'steps',
+  'checkIns',
+  'habits',
+  'habitLog',
+  'settings',
 ] as const satisfies readonly (keyof Store)[];
 
 type DataKey = (typeof DATA_KEYS)[number];
@@ -27,6 +34,10 @@ const ARRAY_KEYS: DataKey[] = [
   'foodLog',
   'customFoods',
   'bodyWeights',
+  'sleepLog',
+  'cardioLog',
+  'checkIns',
+  'habits',
 ];
 
 export function makeBackup(): string {
@@ -93,7 +104,17 @@ export function summarizeBackup(
 export function restoreBackup(json: string): { ok: true } | { ok: false; error: string } {
   const parsed = parseBackup(json);
   if (!parsed.ok) return parsed;
-  useStore.setState(parsed.data);
+  // Backups from before a feature existed lack its data: start those empty.
+  useStore.setState({
+    sleepLog: [],
+    cardioLog: [],
+    steps: {},
+    checkIns: [],
+    habits: [],
+    habitLog: {},
+    ...parsed.data,
+    settings: completeSettings(parsed.data.settings),
+  });
   return { ok: true };
 }
 

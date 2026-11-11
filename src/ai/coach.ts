@@ -32,7 +32,7 @@ const PROMPT_VERSION = hash(SYSTEM_PROMPT + JSON.stringify(TOOLS));
 /** Image blocks in the stored history point to locally stored photos. */
 const IMAGE_REF = 'fitlog-image-ref:';
 /** Upper bound on model calls per user message (each tool round is one call). */
-const MAX_STEPS = 8;
+const MAX_STEPS = 12;
 
 interface CoachState {
   model: CoachModel;
@@ -352,6 +352,10 @@ function activityLabel(tool: string): string {
   if (tool.includes('workout')) return 'Training bijwerken…';
   if (tool.includes('weight')) return 'Gewicht bijwerken…';
   if (tool === 'update_profile') return 'Profiel bijwerken…';
+  if (tool.includes('sleep')) return 'Slaap bijwerken…';
+  if (tool.includes('cardio') || tool === 'set_steps') return 'Beweging bijwerken…';
+  if (tool === 'log_check_in' || tool.includes('habit')) return 'Herstel bijwerken…';
+  if (tool === 'update_settings' || tool === 'set_phase') return 'Instellingen bijwerken…';
   return 'Bezig…';
 }
 

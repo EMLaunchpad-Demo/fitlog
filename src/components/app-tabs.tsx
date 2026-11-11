@@ -21,13 +21,17 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Trainen</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="dumbbell.fill" md="fitness_center" />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="plans">
-        <NativeTabs.Trigger.Label>Schema&apos;s</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="list.bullet.clipboard.fill" md="assignment" />
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="food">
         <NativeTabs.Trigger.Label>Voeding</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="fork.knife" md="restaurant" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="recovery">
+        <NativeTabs.Trigger.Label>Herstel</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="moon.fill" md="bedtime" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="progress">
+        <NativeTabs.Trigger.Label>Voortgang</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="chart.bar.fill" md="bar_chart" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

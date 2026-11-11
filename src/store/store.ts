@@ -6,21 +6,27 @@ import { BUILT_IN_EXERCISES } from '@/data/exercises';
 import { BUILT_IN_FOODS } from '@/data/foods';
 import { PRESET_PLANS } from '@/data/plans';
 import { dateKey, uid } from '@/lib/format';
+import { deloadSets, deloadStatus } from '@/lib/recovery';
 import type {
   BodyComposition,
   BodyWeight,
+  CardioSession,
+  CheckIn,
   Exercise,
   Food,
   FoodEntry,
   Goals,
+  Habit,
   Plan,
   PlanExercise,
   Profile,
+  Settings,
+  SleepEntry,
   Workout,
   WorkoutExercise,
   WorkoutSet,
 } from '@/lib/types';
-import { previousSets } from '@/lib/workout-stats';
+import { previousSets, startOfWeek } from '@/lib/workout-stats';
 
 export interface RestTimer {
   endsAt: number;
@@ -43,7 +49,24 @@ interface State {
   goals: Goals;
   bodyWeights: BodyWeight[];
   profile: Profile;
+
+  /** One entry per night, oldest first */
+  sleepLog: SleepEntry[];
+  /** Oldest first */
+  cardioLog: CardioSession[];
+  /** Step count per date */
+  steps: Record<string, number>;
+  /** One entry per day, oldest first */
+  checkIns: CheckIn[];
+  habits: Habit[];
+  /** Ids of the habits done, per date */
+  habitLog: Record<string, string[]>;
+  settings: Settings;
 }
+
+export type SettingsPatch = Partial<Omit<Settings, 'sleep'>> & {
+  sleep?: Partial<Settings['sleep']>;
+};
 
 interface Actions {
   // Workouts
@@ -102,6 +125,23 @@ interface Actions {
 
   // Profile
   setProfile: (profile: Profile) => void;
+
+  // Sleep, cardio, recovery
+  /** Replaces the night of that date. */
+  logSleep: (entry: Omit<SleepEntry, 'id'>) => void;
+  removeSleep: (date: string) => void;
+  addCardio: (session: Omit<CardioSession, 'id' | 'createdAt'>) => string;
+  removeCardio: (id: string) => void;
+  setSteps: (date: string, steps: number) => void;
+  /** Replaces the check-in of that date. */
+  saveCheckIn: (checkIn: CheckIn) => void;
+  removeCheckIn: (date: string) => void;
+  addHabit: (name: string) => void;
+  removeHabit: (id: string) => void;
+  toggleHabit: (date: string, id: string) => void;
+  setSettings: (patch: SettingsPatch) => void;
+  /** Marks this week as a deload week (or undoes that). */
+  setDeloadWeek: (on: boolean) => void;
 }
 
 export type Store = State & Actions;
@@ -143,6 +183,19 @@ function mapDay(
   return { ...plan, days: plan.days.map((d) => (d.id === dayId ? fn(d) : d)) };
 }
 
+export const DEFAULT_SETTINGS: Settings = {
+  sex: 'man',
+  birthYear: null,
+  heightCm: null,
+  sleep: { screensOff: null, bedtime: '23:00', wake: '07:00' },
+  stepGoal: 8000,
+  cardioGoalMin: 150,
+  restDays: [],
+  deloadEveryWeeks: 6,
+  lastDeloadWeek: null,
+  phase: null,
+};
+
 const initialState: State = {
   customExercises: [],
   plans: PRESET_PLANS,
@@ -157,7 +210,25 @@ const initialState: State = {
   goals: { kcal: 2200, protein: 140, carbs: 250, fat: 70, waterGlasses: 8 },
   bodyWeights: [],
   profile: { name: '', about: '' },
+  sleepLog: [],
+  cardioLog: [],
+  steps: {},
+  checkIns: [],
+  habits: [],
+  habitLog: {},
+  settings: DEFAULT_SETTINGS,
 };
+
+/** Fills in anything missing from stored or imported settings (older versions, partial imports). */
+export function completeSettings(raw: unknown): Settings {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Settings>;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...r,
+    sleep: { ...DEFAULT_SETTINGS.sleep, ...(r.sleep ?? {}) },
+    restDays: Array.isArray(r.restDays) ? r.restDays : DEFAULT_SETTINGS.restDays,
+  };
+}
 
 export const useStore = create<Store>()(
   persist(
@@ -166,8 +237,10 @@ export const useStore = create<Store>()(
 
       // ───────────────────────── Workouts ─────────────────────────
       startWorkout: (opts = {}) => {
-        const { plans, workouts } = get();
+        const { plans, workouts, settings } = get();
         const now = Date.now();
+        // In a deload week the plan's sets are roughly halved.
+        const deload = deloadStatus(settings, workouts).active;
         let workout: Workout = {
           id: uid(),
           name: 'Training',
@@ -185,7 +258,7 @@ export const useStore = create<Store>()(
               planId: plan.id,
               dayId: day.id,
               exercises: day.exercises.map((pe) =>
-                makeWorkoutExercise(pe.exerciseId, workouts, pe.sets, {
+                makeWorkoutExercise(pe.exerciseId, workouts, deload ? deloadSets(pe.sets) : pe.sets, {
                   target: pe.target,
                   restSec: pe.restSec,
                 }),
@@ -485,11 +558,94 @@ export const useStore = create<Store>()(
 
       removeBodyWeight: (id) =>
         set((s) => ({ bodyWeights: s.bodyWeights.filter((b) => b.id !== id) })),
+
+      // ───────────────────────── Sleep, cardio, recovery ─────────────────────────
+      logSleep: (entry) =>
+        set((s) => ({
+          sleepLog: [...s.sleepLog.filter((e) => e.date !== entry.date), { ...entry, id: uid() }].sort(
+            (a, b) => a.date.localeCompare(b.date),
+          ),
+        })),
+
+      removeSleep: (date) => set((s) => ({ sleepLog: s.sleepLog.filter((e) => e.date !== date) })),
+
+      addCardio: (session) => {
+        const id = uid();
+        set((s) => ({
+          cardioLog: [...s.cardioLog, { ...session, id, createdAt: Date.now() }].sort(
+            (a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt,
+          ),
+        }));
+        return id;
+      },
+
+      removeCardio: (id) => set((s) => ({ cardioLog: s.cardioLog.filter((c) => c.id !== id) })),
+
+      setSteps: (date, steps) =>
+        set((s) => {
+          const next = { ...s.steps };
+          if (steps > 0) next[date] = Math.round(steps);
+          else delete next[date];
+          return { steps: next };
+        }),
+
+      saveCheckIn: (checkIn) =>
+        set((s) => ({
+          checkIns: [...s.checkIns.filter((c) => c.date !== checkIn.date), checkIn].sort((a, b) =>
+            a.date.localeCompare(b.date),
+          ),
+        })),
+
+      removeCheckIn: (date) =>
+        set((s) => ({ checkIns: s.checkIns.filter((c) => c.date !== date) })),
+
+      addHabit: (name) =>
+        set((s) =>
+          s.habits.some((h) => h.name.toLowerCase() === name.trim().toLowerCase())
+            ? s
+            : { habits: [...s.habits, { id: uid(), name: name.trim() }] },
+        ),
+
+      removeHabit: (id) => set((s) => ({ habits: s.habits.filter((h) => h.id !== id) })),
+
+      toggleHabit: (date, id) =>
+        set((s) => {
+          const done = s.habitLog[date] ?? [];
+          return {
+            habitLog: {
+              ...s.habitLog,
+              [date]: done.includes(id) ? done.filter((x) => x !== id) : [...done, id],
+            },
+          };
+        }),
+
+      setSettings: (patch) =>
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            ...patch,
+            sleep: { ...s.settings.sleep, ...(patch.sleep ?? {}) },
+          },
+        })),
+
+      setDeloadWeek: (on) =>
+        set((s) => {
+          const thisWeek = dateKey(startOfWeek());
+          if (on) return { settings: { ...s.settings, lastDeloadWeek: thisWeek } };
+          return s.settings.lastDeloadWeek === thisWeek
+            ? { settings: { ...s.settings, lastDeloadWeek: null } }
+            : s;
+        }),
     }),
     {
       name: 'fitlog-store',
       version: 1,
       storage: createJSONStorage(() => AsyncStorage),
+      // New settings fields get their defaults when older stored data lacks them.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<State>;
+        return { ...current, ...p, settings: completeSettings(p.settings) };
+      },
     },
   ),
 );

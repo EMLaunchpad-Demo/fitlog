@@ -45,6 +45,17 @@ const ICONS = {
   key: { ios: 'key.fill', android: 'key', web: 'key' },
   newChat: { ios: 'square.and.pencil', android: 'edit_square', web: 'edit_square' },
   warning: { ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' },
+  moon: { ios: 'moon.fill', android: 'bedtime', web: 'bedtime' },
+  sun: { ios: 'sun.max.fill', android: 'wb_sunny', web: 'wb_sunny' },
+  heart: { ios: 'heart.fill', android: 'favorite', web: 'favorite' },
+  run: { ios: 'figure.run', android: 'directions_run', web: 'directions_run' },
+  walk: { ios: 'figure.walk', android: 'directions_walk', web: 'directions_walk' },
+  bike: { ios: 'bicycle', android: 'directions_bike', web: 'directions_bike' },
+  progress: { ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' },
+  info: { ios: 'info.circle', android: 'info', web: 'info' },
+  book: { ios: 'book.fill', android: 'menu_book', web: 'menu_book' },
+  rest: { ios: 'figure.mind.and.body', android: 'self_improvement', web: 'self_improvement' },
+  download: { ios: 'square.and.arrow.down', android: 'download', web: 'download' },
 } satisfies Record<string, SymbolName>;
 
 export type IconName = keyof typeof ICONS;

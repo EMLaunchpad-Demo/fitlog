@@ -9,13 +9,16 @@ import {
   Divider,
   EmptyState,
   ListRow,
+  ProgressBar,
   Row,
   SectionTitle,
   Stat,
   TabScreen,
   Txt,
 } from '@/components/ui';
-import { durationLabel, monthName, num, shortDate } from '@/lib/format';
+import { weekCardio, weekSteps } from '@/lib/cardio';
+import { dateKey, durationLabel, monthName, num, shortDate } from '@/lib/format';
+import { deloadStatus, weekKey } from '@/lib/recovery';
 import { space, useColors } from '@/lib/theme';
 import type { Workout } from '@/lib/types';
 import { doneSetCount, workoutVolume } from '@/lib/workout-stats';
@@ -29,6 +32,15 @@ export default function TrainScreen() {
   const activeWorkout = useStore((s) => s.activeWorkout);
   const customExercises = useStore((s) => s.customExercises);
   const startWorkout = useStore((s) => s.startWorkout);
+  const cardioLog = useStore((s) => s.cardioLog);
+  const steps = useStore((s) => s.steps);
+  const settings = useStore((s) => s.settings);
+
+  const thisWeek = weekKey(0);
+  const cardio = weekCardio(cardioLog, thisWeek);
+  const stepWeek = weekSteps(steps, thisWeek);
+  const stepsToday = steps[dateKey()] ?? 0;
+  const deload = deloadStatus(settings, workouts);
 
   const plan = plans.find((p) => p.id === activePlanId);
   const next = nextPlanDay(plan, workouts);
@@ -63,7 +75,19 @@ export default function TrainScreen() {
 
       {!activeWorkout ? (
         <Card>
-          <Txt variant="label">Nieuwe training</Txt>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Txt variant="label">Nieuwe training</Txt>
+            {plan ? (
+              <Txt variant="small" numberOfLines={1}>
+                {plan.name}
+              </Txt>
+            ) : null}
+          </Row>
+          {deload.active ? (
+            <Txt variant="small" color={c.accent} style={{ fontWeight: '600' }}>
+              Deloadweek: je start met de helft van de sets. Stop 3-4 reps voor falen.
+            </Txt>
+          ) : null}
           {plan && plan.days.length ? (
             <View style={{ gap: space.sm }}>
               {plan.days.map((d) => (
@@ -83,6 +107,46 @@ export default function TrainScreen() {
         </Card>
       ) : null}
 
+      <Card onPress={() => router.push('/cardio')}>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <Row gap={space.sm}>
+            <Icon name="run" size={16} color={c.accent} />
+            <Txt variant="label">Cardio & stappen</Txt>
+          </Row>
+          <Row gap={4}>
+            <Icon name="plus" size={14} color={c.accent} />
+            <Txt variant="h3" color={c.accent}>
+              Loggen
+            </Txt>
+          </Row>
+        </Row>
+        <Row>
+          <Stat label="Cardio deze week" value={String(cardio.moderateEq)} unit="min" />
+          <Stat label="Stappen vandaag" value={stepsToday ? num(stepsToday, 0) : '–'} />
+          <Stat label="Stappen gem." value={stepWeek.days ? num(stepWeek.avg, 0) : '–'} />
+        </Row>
+        <ProgressBar value={cardio.moderateEq} max={settings.cardioGoalMin} color={c.accent} cap />
+        <Txt variant="small">
+          Doel {settings.cardioGoalMin} min per week en {num(settings.stepGoal, 0)} stappen per dag.
+        </Txt>
+      </Card>
+
+      <Card style={{ paddingVertical: space.sm, gap: 0 }}>
+        <ListRow
+          title="Schema’s"
+          subtitle={plan ? `Actief: ${plan.name}` : 'Kies of maak een trainingsschema'}
+          left={<Icon name="plans" size={20} color={c.accent} />}
+          onPress={() => router.push('/plans')}
+        />
+        <Divider />
+        <ListRow
+          title="Oefeningen & records"
+          subtitle="Bekijk je voortgang per oefening"
+          left={<Icon name="chart" size={20} color={c.accent} />}
+          onPress={() => router.push({ pathname: '/exercises', params: { mode: 'browse' } })}
+        />
+      </Card>
+
       <Card>
         <Txt variant="label">{monthName(now.getMonth())}</Txt>
         <Row>
@@ -93,19 +157,6 @@ export default function TrainScreen() {
             <Stat label="Tijd" value={String(Math.round(monthTime / 60000))} unit="min" />
           )}
           <Stat label="Volume" value={num(monthVolume / 1000, 1)} unit="ton" />
-        </Row>
-      </Card>
-
-      <Card onPress={() => router.push({ pathname: '/exercises', params: { mode: 'browse' } })}>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Row gap={space.md}>
-            <Icon name="chart" size={20} color={c.accent} />
-            <View>
-              <Txt variant="h3">Oefeningen & records</Txt>
-              <Txt variant="small">Bekijk je voortgang per oefening</Txt>
-            </View>
-          </Row>
-          <Icon name="chevronRight" size={14} color={c.textFaint} />
         </Row>
       </Card>
 

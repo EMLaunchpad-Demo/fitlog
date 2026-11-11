@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { View } from 'react-native';
 
 import { Icon } from '@/components/icon';
-import { Button, Card, EmptyState, Row, SectionTitle, TabScreen, Txt } from '@/components/ui';
+import { Button, Card, EmptyState, Row, SectionTitle, StackScroll, Txt } from '@/components/ui';
 import { space, useColors } from '@/lib/theme';
 import type { Plan } from '@/lib/types';
 import { useStore } from '@/store/store';
@@ -21,7 +21,7 @@ export default function PlansScreen() {
   };
 
   return (
-    <TabScreen title="Schema's">
+    <StackScroll>
       {active ? (
         <>
           <SectionTitle title="Actief schema" />
@@ -44,7 +44,7 @@ export default function PlansScreen() {
       )}
 
       <Button label="Nieuw schema" icon="plus" variant="secondary" onPress={create} />
-    </TabScreen>
+    </StackScroll>
   );
 }
 

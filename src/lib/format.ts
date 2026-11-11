@@ -110,3 +110,26 @@ export function durationLabel(ms: number): string {
   const m = totalMin % 60;
   return h > 0 ? `${h} u ${String(m).padStart(2, '0')} min` : `${m} min`;
 }
+
+/** "2026-10-12" -> "12-10-2026" */
+export function dutchDate(key: string): string {
+  const [y, m, d] = key.split('-');
+  return `${d}-${m}-${y}`;
+}
+
+/** Parses "12-10-2026", "12/10/26", "12-10" (this year) or "2026-10-12" to a date key; null when invalid. */
+export function parseDutchDate(text: string): string | null {
+  const t = text.trim();
+  let y: number, m: number, d: number;
+  const iso = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const nl = t.match(/^(\d{1,2})[-/. ](\d{1,2})(?:[-/. ](\d{2}|\d{4}))?$/);
+  if (iso) [y, m, d] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  else if (nl) {
+    d = Number(nl[1]);
+    m = Number(nl[2]);
+    y = nl[3] ? Number(nl[3].length === 2 ? `20${nl[3]}` : nl[3]) : new Date().getFullYear();
+  } else return null;
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return dateKey(date);
+}
