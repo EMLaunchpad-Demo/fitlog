@@ -722,11 +722,14 @@ export function TimeField({
   value,
   onChange,
   step = 15,
+  compact,
 }: {
   label: string;
   value: string;
   onChange: (time: string) => void;
   step?: number;
+  /** Just the time box: no label above it and no −/+ buttons. */
+  compact?: boolean;
 }) {
   const c = useColors();
   const [text, setText] = useState(value);
@@ -750,10 +753,12 @@ export function TimeField({
     commit(formatTime(snapped + delta));
   };
   return (
-    <View style={{ gap: space.xs, flexGrow: 1, flexShrink: 1 }}>
-      <Txt variant="small">{label}</Txt>
+    <View style={compact ? { width: 76 } : { gap: space.xs, flexGrow: 1, flexShrink: 1 }}>
+      {compact ? null : <Txt variant="small">{label}</Txt>}
       <Row gap={space.xs}>
-        <IconButton icon="minus" label={`${label} eerder`} size={34} onPress={() => nudge(-step)} />
+        {compact ? null : (
+          <IconButton icon="minus" label={`${label} eerder`} size={34} onPress={() => nudge(-step)} />
+        )}
         <TextInput
           value={text}
           accessibilityLabel={label}
@@ -779,7 +784,9 @@ export function TimeField({
             },
           ]}
         />
-        <IconButton icon="plus" label={`${label} later`} size={34} onPress={() => nudge(step)} />
+        {compact ? null : (
+          <IconButton icon="plus" label={`${label} later`} size={34} onPress={() => nudge(step)} />
+        )}
       </Row>
     </View>
   );

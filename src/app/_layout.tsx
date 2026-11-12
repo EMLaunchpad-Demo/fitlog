@@ -5,6 +5,8 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { useColorScheme } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { startCloudSync } from '@/lib/cloud';
+import { startReminderSync } from '@/lib/reminders';
 import { useStore } from '@/store/store';
 import { palettes } from '@/lib/theme';
 
@@ -26,7 +28,11 @@ export default function RootLayout() {
   const hydrated = useHydrated();
 
   useEffect(() => {
-    if (hydrated) SplashScreen.hideAsync().catch(() => {});
+    if (!hydrated) return;
+    SplashScreen.hideAsync().catch(() => {});
+    // Web only: automatic backup and keeping reminder times in step (no-ops elsewhere).
+    startCloudSync();
+    startReminderSync();
   }, [hydrated]);
 
   if (!hydrated) return null;
@@ -72,6 +78,10 @@ export default function RootLayout() {
           <Stack.Screen name="checkin" options={{ presentation: 'modal', title: 'Check-in' }} />
           <Stack.Screen name="phase" options={{ presentation: 'modal', title: 'Fase' }} />
           <Stack.Screen name="body" options={{ presentation: 'modal', title: 'Lichaamsmaten' }} />
+          <Stack.Screen
+            name="cloud"
+            options={{ presentation: 'modal', title: 'Back-up & herinneringen' }}
+          />
           <Stack.Screen name="menu" options={{ title: 'Weekmenu' }} />
           <Stack.Screen name="scan" options={{ presentation: 'modal', title: 'Barcode scannen' }} />
           <Stack.Screen name="setup" options={{ presentation: 'modal', title: 'Persoonlijke setup' }} />
