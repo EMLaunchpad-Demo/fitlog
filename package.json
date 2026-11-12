@@ -52,7 +52,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "node e2e/app.e2e.js && node e2e/coach.e2e.js && node e2e/coach-actions.e2e.js && node e2e/recovery.e2e.js",
+    "test:e2e": "node e2e/app.e2e.js && node e2e/coach.e2e.js && node e2e/coach-actions.e2e.js && node e2e/recovery.e2e.js && node e2e/plan.e2e.js",
     "test:web-build": "expo export --platform web && node e2e/web-build.e2e.js"
   },
   "private": true

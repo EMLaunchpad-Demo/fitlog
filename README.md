@@ -22,6 +22,14 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
     en je fase (cut, onderhoud, bulk)
   - je profiel ("onthoud dat ik last heb van mijn knie")
 - Weekreview op verzoek: wat ging goed, wat kan beter, en één aanpassing voor volgende week
+- **Analyse en plan:** de coach analyseert je lichaam en je gegevens (gewicht en trend,
+  lichaamssamenstelling, taille, kracht per kilo lichaamsgewicht, sets per spiergroep, voeding
+  tegenover verbruik, slaap en herstel), kiest zelf je fase en je voedingsdoelen, stuurt je
+  schema bij en bewaart het plan met focuspunten. Na de termijn die hij kiest (meestal twee
+  weken) herziet hij het
+- Weekmenu met boodschappenlijst dat op je doelen uitkomt; elke maaltijd log je met één tik
+- **Ochtendbriefing** (optioneel, Coach-instellingen): elke dag één korte briefing op Vandaag,
+  met het goedkoopste model
 - Elke actie verschijnt als kaartje in de chat; tik erop om het resultaat te zien
 - **Ongedaan maken:** elke wijziging van de coach draai je met één tik terug, zolang je die
   gegevens daarna niet zelf hebt aangepast. De coach krijgt bij je volgende bericht te horen
@@ -59,6 +67,8 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 - **Cardio & stappen:** sessies loggen (soort, minuten, intensiteit, afstand, hartslag) met
   geschat verbruik, je weekdoel in minuten (zware minuten tellen dubbel) en stappen per dag
 - **Deloadweek:** met één tik aan; je schema start dan met de helft van de sets
+- **Schijven en opwarmen:** bij stangoefeningen welke schijven er per kant op moeten en een
+  opbouw naar je eerste zware set
 
 **Schema's**
 - Vier startschema's: PPL + Upper/Lower (5×, standaard actief), Full body (A/B),
@@ -78,6 +88,9 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 - Weekrapport: trainingen, calorieën en eiwit met dagen op doel, slaap, stappen, cardio, gewicht
 - Harde sets per spiergroep per week naast de richtlijn van 10-20
 - Geschat dagelijks verbruik uit je voedingslog en gewichtstrend
+- **Mijn plan:** de analyse en de focuspunten van je coach, met de datum van de volgende analyse
+- **Stagnatie:** oefeningen die drie trainingen of langer niet vooruitgaan
+- **Lichaamsmaten:** taille en andere maten, met je taille ten opzichte van je lengte
 - **Onderbouwing:** per onderwerp wat het onderzoek zegt, hoe sterk het bewijs is en de bron,
   naast je eigen cijfers. Zie `src/lib/guidelines.ts`
 
@@ -86,6 +99,10 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 - Database met 80 veelgegeten Nederlandse producten (per 100 g, met handige eenheden zoals
   "1 snee" of "1 bakje"), recent gebruikte producten bovenaan
 - Snel invoeren van eigen producten (per portie), optioneel bewaren
+- **Barcodescanner:** scan een verpakking met de camera (of typ de code) en haal de
+  voedingswaarden op uit Open Food Facts; het product staat daarna ook bij Zoeken
+- **Maaltijden:** bewaar een maaltijd of recept en log hem later in één tik, of neem
+  dezelfde maaltijd als gisteren over
 - Waterteller
 - Doelen instellen, of laten berekenen (Mifflin-St Jeor) op basis van lengte, gewicht,
   leeftijd, activiteit en doel
@@ -203,9 +220,13 @@ src/
     plans.tsx          schema's
     guide.tsx          onderbouwing met bronnen
     setup.tsx          persoonlijke setup laden
+    body.tsx           lichaamsmaten
+    menu.tsx           weekmenu van de coach
+    scan.tsx           barcodescanner
     coach.tsx          AI-coach (chat)
     coach-settings.tsx API-key, model en verbruik
-  ai/                  Claude-client, agent-loop, tools, systeemprompt, foto's, key-opslag
+  ai/                  Claude-client, agent-loop, tools, systeemprompt, foto's, key-opslag,
+                       ochtendbriefing
   components/          UI-bouwstenen, grafieken, tab bar, achtergrond (groen glass-thema)
   data/                ingebouwde oefeningen, voedingsmiddelen en schema's
   lib/                 types, formattering (NL), statistieken, thema (kleuren + glass()),
