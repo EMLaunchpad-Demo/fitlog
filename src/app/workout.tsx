@@ -1,6 +1,6 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import { router, Stack } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,8 +20,9 @@ import {
   success,
   tap,
 } from '@/components/ui';
-import { clock, longDate } from '@/lib/format';
+import { clock, longDate, num } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
+import { isBarbell, platesPerSide, warmupSets } from '@/lib/plates';
 import { deloadStatus } from '@/lib/recovery';
 import { AppBackground } from '@/components/background';
 import { radius, space, useColors } from '@/lib/theme';
@@ -190,6 +191,8 @@ function ExerciseBlock({
   const updateSet = useStore((s) => s.updateSet);
   const removeWorkoutExercise = useStore((s) => s.removeWorkoutExercise);
   const startRest = useStore((s) => s.startRest);
+  const barKg = useStore((s) => s.settings.barKg);
+  const [showPlates, setShowPlates] = useState(false);
 
   const ex = getExercise(we.exerciseId);
   if (!ex) return null;
@@ -198,6 +201,11 @@ function ExerciseBlock({
   const target = targetNumber(we.target);
   // Double progression: what to aim for today, based on the previous session.
   const progression = progressionHint(prev, we.target, ex.kind);
+  // Plates and warm-up for barbell lifts, for the weight of the first set (or last time's).
+  const barbell = isBarbell(ex);
+  const workKg = we.sets.find((x) => x.weight != null)?.weight ?? prev[0]?.weight ?? null;
+  const loading = barbell && workKg != null ? platesPerSide(workKg, barKg) : null;
+  const warmup = barbell && workKg != null ? warmupSets(workKg, barKg) : [];
 
   const toggle = (s: WorkoutSet, i: number) => {
     if (s.done) {
@@ -269,6 +277,50 @@ function ExerciseBlock({
             {progression}
           </Txt>
         </Row>
+      ) : null}
+
+      {barbell ? (
+        <View style={{ paddingHorizontal: space.xs, gap: 6 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Schijven en opwarmen voor ${ex.name}`}
+            onPress={() => setShowPlates(!showPlates)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Icon name="weights" size={13} color={c.accent} />
+            <Txt variant="small" color={c.accent} style={{ fontWeight: '600', flex: 1 }}>
+              {loading && workKg != null
+                ? `${num(workKg)} kg: ${loading.plates.length ? loading.plates.map((p) => num(p, 2)).join(' + ') : 'lege stang'}${loading.plates.length ? ' per kant' : ''}`
+                : 'Schijven en opwarmen'}
+            </Txt>
+            <Icon name={showPlates ? 'chevronUp' : 'chevronDown'} size={11} color={c.accent} />
+          </Pressable>
+          {showPlates ? (
+            <View style={{ gap: 4 }}>
+              {workKg == null ? (
+                <Txt variant="small">Vul bij set 1 je gewicht in, dan reken ik de schijven uit.</Txt>
+              ) : (
+                <>
+                  {loading?.rest ? (
+                    <Txt variant="small">
+                      {num(loading.rest, 2)} kg is met standaardschijven niet te maken.
+                    </Txt>
+                  ) : null}
+                  {workKg < barKg ? (
+                    <Txt variant="small">Lichter dan de stang van {num(barKg)} kg.</Txt>
+                  ) : null}
+                  {warmup.length ? (
+                    <Txt variant="small">
+                      Opwarmen: {warmup.map((w) => `${num(w.kg)} kg × ${w.reps}`).join(' → ')}, dan
+                      je eerste set. Hou het licht: het doel is de beweging inslijpen, niet moe
+                      worden.
+                    </Txt>
+                  ) : null}
+                  <Txt variant="small">Gerekend met een stang van {num(barKg)} kg.</Txt>
+                </>
+              )}
+            </View>
+          ) : null}
+        </View>
       ) : null}
 
       <View style={styles.headerRow}>

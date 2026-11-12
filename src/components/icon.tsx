@@ -56,6 +56,10 @@ const ICONS = {
   book: { ios: 'book.fill', android: 'menu_book', web: 'menu_book' },
   rest: { ios: 'figure.mind.and.body', android: 'self_improvement', web: 'self_improvement' },
   download: { ios: 'square.and.arrow.down', android: 'download', web: 'download' },
+  barcode: { ios: 'barcode.viewfinder', android: 'barcode_scanner', web: 'barcode_scanner' },
+  bell: { ios: 'bell.fill', android: 'notifications', web: 'notifications' },
+  cloud: { ios: 'icloud.fill', android: 'cloud', web: 'cloud' },
+  weights: { ios: 'scalemass', android: 'weight', web: 'weight' },
 } satisfies Record<string, SymbolName>;
 
 export type IconName = keyof typeof ICONS;

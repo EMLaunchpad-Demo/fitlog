@@ -24,6 +24,11 @@ const DATA_KEYS = [
   'habits',
   'habitLog',
   'settings',
+  'measures',
+  'coachPlan',
+  'planHistory',
+  'savedMeals',
+  'weekMenu',
 ] as const satisfies readonly (keyof Store)[];
 
 type DataKey = (typeof DATA_KEYS)[number];
@@ -38,6 +43,9 @@ const ARRAY_KEYS: DataKey[] = [
   'cardioLog',
   'checkIns',
   'habits',
+  'measures',
+  'planHistory',
+  'savedMeals',
 ];
 
 export function makeBackup(): string {
@@ -112,6 +120,11 @@ export function restoreBackup(json: string): { ok: true } | { ok: false; error: 
     checkIns: [],
     habits: [],
     habitLog: {},
+    measures: [],
+    coachPlan: null,
+    planHistory: [],
+    savedMeals: [],
+    weekMenu: null,
     ...parsed.data,
     settings: completeSettings(parsed.data.settings),
   });

@@ -14,6 +14,7 @@ import {
   HeaderButton,
   Row,
   SectionTitle,
+  Segmented,
   StackScroll,
   Txt,
   confirm,
@@ -30,6 +31,8 @@ export default function CoachSettings() {
   const c = useColors();
   const model = useCoach((s) => s.model);
   const totalCost = useCoach((s) => s.totalCost);
+  const briefingOn = useStore((s) => s.settings.briefing);
+  const setSettings = useStore((s) => s.setSettings);
   const conversationCost = useCoach((s) => s.conversationCost);
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -259,6 +262,24 @@ export default function CoachSettings() {
         <Txt variant="small">
           Een gewone vraag kost met Opus 5.5 grofweg 1 tot 5 cent, een foto iets meer. Met €100
           tegoed kun je dus duizenden berichten sturen.
+        </Txt>
+      </Card>
+
+      <SectionTitle title="Ochtendbriefing" />
+      <Card>
+        <Segmented
+          options={[
+            { key: 'aan', label: 'Aan' },
+            { key: 'uit', label: 'Uit' },
+          ]}
+          value={briefingOn ? 'aan' : 'uit'}
+          onChange={(v) => setSettings({ briefing: v === 'aan' })}
+        />
+        <Txt variant="small">
+          Elke dag bij het openen van de app één korte briefing op Vandaag: trainings- of rustdag,
+          hoe je ervoor staat en waar je op moet letten. Dat is één klein verzoek per dag met het
+          goedkoopste model (minder dan een cent per week), waarbij je gegevens van die dag naar
+          Claude gaan.
         </Txt>
       </Card>
 

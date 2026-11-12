@@ -235,4 +235,66 @@ export interface Settings {
   /** Monday (YYYY-MM-DD) of the most recent deload week. */
   lastDeloadWeek: string | null;
   phase: Phase | null;
+  /** Weight of the empty barbell, for the plate calculator. */
+  barKg: number;
+  /** Ask the coach for a short briefing once a day (costs a fraction of a cent). */
+  briefing: boolean;
+}
+
+/** Body measurements in cm. Every value is optional. */
+export interface BodyMeasure {
+  id: string;
+  date: string;
+  waist?: number;
+  chest?: number;
+  arm?: number;
+  thigh?: number;
+  hips?: number;
+}
+
+/** What the coach decided after analysing the user's body and logs. */
+export interface CoachPlan {
+  id: string;
+  date: string;
+  /** The analysis and the plan in plain text */
+  summary: string;
+  /** The few things to focus on until the next review */
+  focus: string[];
+  /** When the coach wants to look again */
+  reviewDate: string;
+}
+
+export interface MealItem extends Macros {
+  name: string;
+  /** What it is, e.g. "150 g" or "2 sneetjes" */
+  amountLabel: string;
+}
+
+/** A meal or recipe saved to log again in one tap. */
+export interface SavedMeal {
+  id: string;
+  name: string;
+  /** How many portions the items add up to (1 for a plain meal, more for a recipe) */
+  portions: number;
+  items: MealItem[];
+  createdAt: number;
+}
+
+/** A week of meals made by the coach, with a shopping list. */
+export interface WeekMenu {
+  id: string;
+  createdAt: number;
+  title: string;
+  days: {
+    /** "Maandag", "Dag 1", "Trainingsdag", … */
+    label: string;
+    meals: { meal: Meal; name: string; items: MealItem[] }[];
+  }[];
+  shopping: { name: string; done: boolean }[];
+}
+
+/** The coach's short note for today. */
+export interface Briefing {
+  date: string;
+  text: string;
 }

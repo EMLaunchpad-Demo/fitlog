@@ -2,6 +2,7 @@ import type { BetaTool } from '@anthropic-ai/sdk/resources/beta/messages/message
 import type { Href } from 'expo-router';
 
 import { BUILT_IN_EXERCISES, MUSCLE_GROUPS } from '@/data/exercises';
+import { bodyAnalysis } from '@/lib/analysis';
 import { BODY_METRICS, hasComposition } from '@/lib/body';
 import {
   CARDIO_KINDS,
@@ -17,6 +18,7 @@ import { MEALS, mealLabel, sumMacros } from '@/lib/nutrition';
 import { PHASE_LABEL, estimateEnergyUse, phaseProgress } from '@/lib/phase';
 import {
   WEEKDAYS,
+  ageFromBirthYear,
   dayPlan,
   deloadStatus,
   readiness,
@@ -30,10 +32,12 @@ import { weekReport, weeklyMuscleSets } from '@/lib/report';
 import { hoursLabel, minutesBetween, normalizeTime } from '@/lib/time';
 import type {
   BodyComposition,
+  BodyMeasure,
   CardioKind,
   ExerciseKind,
   Intensity,
   Meal,
+  MealItem,
   MuscleGroup,
   Phase,
   Plan,
@@ -175,6 +179,11 @@ export const TOOLS: BetaTool[] = [
     'get_recovery',
     'Slaap, check-ins (energie, spierpijn, stress, humeur) met herstelscore, stappen en cardio per dag voor de afgelopen N dagen, plus slaapstatistieken, het slaapschema, vaste rustdagen, deload-status en gewoontes. Cardiosessies hebben een id.',
     { days: { type: 'integer', description: 'Aantal dagen terug, max 60' } },
+  ),
+  tool(
+    'get_body_analysis',
+    'Volledige analyse van lichaam en voortgang in één keer: lengte, leeftijd, gewicht met trend en BMI, lichaamssamenstelling van de weegschaal met FFMI, lichaamsmaten met taille-lengteverhouding, kracht per oefening (geschatte 1RM, verhouding tot lichaamsgewicht, verandering in 8 weken), trainingen per week, sets per spiergroep, oefeningen die stagneren, gemiddelde inname en geschat verbruik, slaap, stappen, cardio, herstelscore, de huidige fase, je vorige plan en welke gegevens ontbreken (data_gaps). Gebruik dit voordat je een plan maakt of bijstuurt.',
+    {},
   ),
   tool(
     'get_week_report',
@@ -404,6 +413,86 @@ export const TOOLS: BetaTool[] = [
     false,
   ),
 
+  // ── Plan, maten, maaltijden ──
+  tool(
+    'save_plan',
+    'Bewaart het plan dat je voor de gebruiker hebt gemaakt, zodat hij het in de app terugziet bij Voortgang. Roep dit aan NADAT je de instellingen zelf hebt aangepast (fase, voedingsdoelen, schema, beweegdoelen). summary: je analyse en het plan in gewone taal, hooguit 1200 tekens, zonder Markdown. focus: de 2 tot 5 dingen waar de gebruiker nu op moet letten, elk één korte zin. review_in_days: wanneer je opnieuw wilt kijken (meestal 14).',
+    {
+      summary: { type: 'string' },
+      focus: { type: 'array', items: { type: 'string' } },
+      review_in_days: { type: 'integer' },
+    },
+    false,
+  ),
+  {
+    name: 'log_measurements',
+    description:
+      'Slaat lichaamsmaten in cm op voor een datum (vult aan wat er die dag al staat). Geef alleen de maten die de gebruiker noemt.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        date: OPT_DATE,
+        waist_cm: { type: 'number', description: 'Taille, ter hoogte van de navel' },
+        chest_cm: { type: 'number' },
+        arm_cm: { type: 'number', description: 'Bovenarm, aangespannen' },
+        thigh_cm: { type: 'number' },
+        hips_cm: { type: 'number' },
+      },
+      required: ['date'],
+      additionalProperties: false,
+    },
+  },
+  tool(
+    'save_meal',
+    'Bewaart een maaltijd of recept om later in één keer te loggen. portions: voor hoeveel porties de items samen zijn (1 voor een gewone maaltijd). Een maaltijd met dezelfde naam wordt vervangen.',
+    {
+      name: { type: 'string' },
+      portions: { type: 'integer' },
+      items: { type: 'array', items: FOOD_ITEM },
+    },
+    false,
+  ),
+  tool(
+    'log_saved_meal',
+    'Logt een bewaarde maaltijd (id of naam uit get_nutrition). portions: hoeveel porties er gegeten zijn.',
+    {
+      saved_meal: { type: 'string' },
+      portions: { type: 'number' },
+      date: OPT_DATE,
+      meal: { type: 'string', enum: MEALS.map((m) => m.key) },
+    },
+    false,
+  ),
+  tool('delete_saved_meal', 'Verwijdert een bewaarde maaltijd (id of naam).', {
+    saved_meal: { type: 'string' },
+  }, false),
+  tool(
+    'save_week_menu',
+    'Bewaart een weekmenu met boodschappenlijst (vervangt het vorige). Elke dag heeft een label ("Maandag", of "Trainingsdag" als dagen zich herhalen) en maaltijden met hun items, zodat de gebruiker elke maaltijd met één tik kan loggen. Laat elke dag ongeveer op de voedingsdoelen uitkomen.',
+    {
+      title: { type: 'string' },
+      days: {
+        type: 'array',
+        items: obj({
+          label: { type: 'string' },
+          meals: {
+            type: 'array',
+            items: obj({
+              meal: { type: 'string', enum: MEALS.map((m) => m.key) },
+              name: { type: 'string', description: 'Naam van het gerecht' },
+              items: { type: 'array', items: FOOD_ITEM },
+            }),
+          },
+        }),
+      },
+      shopping_list: {
+        type: 'array',
+        items: { type: 'string', description: 'Product met hoeveelheid, bijv. "Magere kwark 2 kg"' },
+      },
+    },
+    false,
+  ),
+
   // ── Profiel ──
   tool(
     'update_profile',
@@ -445,7 +534,12 @@ export type DataKey =
   | 'checkIns'
   | 'habits'
   | 'habitLog'
-  | 'settings';
+  | 'settings'
+  | 'measures'
+  | 'coachPlan'
+  | 'planHistory'
+  | 'savedMeals'
+  | 'weekMenu';
 export type DataSnapshot = Partial<Pick<Store, DataKey>>;
 
 export interface UndoRecord {
@@ -487,6 +581,12 @@ const WRITES: Record<string, DataKey[]> = {
   set_phase: ['settings'],
   set_habits: ['habits'],
   check_habit: ['habitLog'],
+  save_plan: ['coachPlan', 'planHistory'],
+  log_measurements: ['measures'],
+  save_meal: ['savedMeals'],
+  log_saved_meal: ['foodLog'],
+  delete_saved_meal: ['savedMeals'],
+  save_week_menu: ['weekMenu'],
 };
 export const WRITE_TOOLS = new Set(Object.keys(WRITES));
 
@@ -592,6 +692,11 @@ function findPlan(id: unknown): Plan {
 
 // ───────────────────────── read executors ─────────────────────────
 
+/** The same snapshot get_overview gives the coach; also the input for the daily briefing. */
+export function overviewSnapshot() {
+  return getOverview();
+}
+
 function getOverview() {
   const s = useStore.getState();
   const today = dateKey();
@@ -627,6 +732,9 @@ function getOverview() {
       volume_kg: Math.round(workoutVolume(w)),
     })),
     workout_in_progress: s.activeWorkout ? s.activeWorkout.name : null,
+    plan: s.coachPlan
+      ? { date: s.coachPlan.date, focus: s.coachPlan.focus, review_date: s.coachPlan.reviewDate }
+      : null,
     ...recoveryOverview(),
   };
 }
@@ -911,7 +1019,24 @@ function getNutrition(input: Input) {
       })),
     };
   }
-  return { goals: s.goals, days };
+  return {
+    goals: s.goals,
+    days,
+    saved_meals: s.savedMeals.map((m) => {
+      const t = sumMacros(m.items);
+      return {
+        id: m.id,
+        name: m.name,
+        portions: m.portions,
+        kcal_per_portion: Math.round(t.kcal / m.portions),
+        protein_per_portion: r1(t.protein / m.portions),
+        items: m.items.map((i) => `${i.name} (${i.amountLabel})`),
+      };
+    }),
+    week_menu: s.weekMenu
+      ? { title: s.weekMenu.title, days: s.weekMenu.days.map((d) => d.label) }
+      : null,
+  };
 }
 
 function getPlans() {
@@ -1509,6 +1634,11 @@ function setPhase(input: Input): Write {
   const magnitude = type === 'onderhoud' ? 0 : (rate ?? (type === 'cut' ? 0.5 : 0.25));
   if (type === 'cut' && magnitude > 1)
     throw new ToolInputError('Meer dan 1% per week afvallen is te snel; kies 1 of lager.');
+  const age = ageFromBirthYear(useStore.getState().settings.birthYear);
+  if (type === 'cut' && age != null && age < 18 && magnitude > 0.5)
+    throw new ToolInputError(
+      'De gebruiker is jonger dan 18: een cut mag hooguit 0,5% per week zijn, en alleen als hij daar zelf om vraagt.',
+    );
   const phase: Phase = {
     type,
     start,
@@ -1575,6 +1705,162 @@ function checkHabit(input: Input): Write {
   };
 }
 
+// ───────────────────────── plan, measurements, meals ─────────────────────────
+
+function getBodyAnalysis() {
+  const s = useStore.getState();
+  return bodyAnalysis(s, (id) => findExercise(id, s.customExercises));
+}
+
+function savePlan(input: Input): Write {
+  const summary = str(input, 'summary');
+  if (summary.length > 2000) throw new ToolInputError('summary is te lang (max 2000 tekens).');
+  const focus = Array.isArray(input.focus)
+    ? input.focus
+        .filter((f): f is string => typeof f === 'string' && !!f.trim())
+        .map((f) => f.trim().slice(0, 160))
+    : [];
+  if (!focus.length || focus.length > 6) throw new ToolInputError('Geef 1 tot 6 focuspunten.');
+  const days = Math.round(num(input, 'review_in_days', 3, 60));
+  const today = dateKey();
+  useStore.getState().setCoachPlan({ date: today, summary, focus, reviewDate: addDays(today, days) });
+  return {
+    result: { saved: true, review_date: addDays(today, days) },
+    action: { label: `Plan opgeslagen · nieuwe analyse over ${days} dagen`, link: '/progress' },
+  };
+}
+
+const MEASURE_FIELDS: [tool: string, key: keyof Omit<BodyMeasure, 'id' | 'date'>, label: string, min: number, max: number][] = [
+  ['waist_cm', 'waist', 'taille', 40, 200],
+  ['chest_cm', 'chest', 'borst', 50, 200],
+  ['arm_cm', 'arm', 'arm', 15, 70],
+  ['thigh_cm', 'thigh', 'bovenbeen', 25, 110],
+  ['hips_cm', 'hips', 'heup', 50, 200],
+];
+
+function logMeasurements(input: Input): Write {
+  const d = date(input, 'date');
+  const values: Omit<BodyMeasure, 'id' | 'date'> = {};
+  const parts: string[] = [];
+  for (const [toolKey, key, label, min, max] of MEASURE_FIELDS) {
+    if (input[toolKey] == null) continue;
+    values[key] = r1(num(input, toolKey, min, max));
+    parts.push(`${label} ${fmt(values[key]!)} cm`);
+  }
+  if (!parts.length) throw new ToolInputError('Geef minstens één maat.');
+  const store = useStore.getState();
+  const previous = [...store.measures].reverse().find((m) => m.date < d);
+  store.logMeasure(d, values);
+  return {
+    result: { saved: true, date: d, values, previous: previous ?? null },
+    action: { label: `Maten: ${parts.join(' · ')}${suffix(d)}`, link: '/body' },
+  };
+}
+
+function mealItems(raw: unknown): MealItem[] {
+  if (!Array.isArray(raw) || !raw.length) throw new ToolInputError('Geef minstens één item.');
+  if (raw.length > 30) throw new ToolInputError('Maximaal 30 items per maaltijd.');
+  return raw.map((r) => {
+    const item = r as Input;
+    return {
+      name: str(item, 'name'),
+      amountLabel: str(item, 'amount'),
+      kcal: Math.round(num(item, 'kcal', 0, 5000)),
+      protein: r1(num(item, 'protein', 0, 500)),
+      carbs: r1(num(item, 'carbs', 0, 1000)),
+      fat: r1(num(item, 'fat', 0, 500)),
+    };
+  });
+}
+
+function findSavedMeal(ref: unknown) {
+  const q = typeof ref === 'string' ? ref.trim().toLowerCase() : '';
+  const meals = useStore.getState().savedMeals;
+  const found =
+    meals.find((m) => m.id === ref) ??
+    meals.find((m) => m.name.toLowerCase() === q) ??
+    meals.find((m) => q && m.name.toLowerCase().includes(q));
+  if (!found)
+    throw new ToolInputError(
+      `Geen bewaarde maaltijd "${String(ref)}". Bestaande: ${meals.map((m) => m.name).join(', ') || 'geen'}.`,
+    );
+  return found;
+}
+
+function saveMealTool(input: Input): Write {
+  const name = str(input, 'name').slice(0, 60);
+  const portions = Math.round(num(input, 'portions', 1, 30));
+  const items = mealItems(input.items);
+  const id = useStore.getState().saveMeal({ name, portions, items });
+  const t = sumMacros(items);
+  return {
+    result: { saved: true, saved_meal_id: id, kcal_per_portion: Math.round(t.kcal / portions) },
+    action: {
+      label: `Maaltijd "${name}" bewaard · ${Math.round(t.kcal / portions)} kcal${portions > 1 ? ' per portie' : ''}`,
+      link: '/food',
+    },
+  };
+}
+
+function logSavedMeal(input: Input): Write {
+  const saved = findSavedMeal(input.saved_meal);
+  const portions = num(input, 'portions', 0.1, 20);
+  const d = date(input, 'date');
+  const m = meal(input.meal);
+  useStore.getState().logMealItems(saved.items, d, m, portions / saved.portions);
+  const t = sumMacros(saved.items);
+  return {
+    result: { logged: saved.name, date: d, meal: m, day_totals: dayTotals(d), goals: useStore.getState().goals },
+    action: {
+      label: `${saved.name} → ${mealLabel(m)} · ${Math.round((t.kcal / saved.portions) * portions)} kcal${suffix(d)}`,
+      link: '/food',
+    },
+  };
+}
+
+function deleteSavedMeal(input: Input): Write {
+  const saved = findSavedMeal(input.saved_meal);
+  useStore.getState().removeSavedMeal(saved.id);
+  return {
+    result: { deleted: saved.name },
+    action: { label: `Bewaarde maaltijd "${saved.name}" verwijderd`, link: '/food' },
+  };
+}
+
+function saveWeekMenu(input: Input): Write {
+  const title = str(input, 'title').slice(0, 80);
+  if (!Array.isArray(input.days) || !input.days.length || input.days.length > 7)
+    throw new ToolInputError('Een weekmenu heeft 1 tot 7 dagen.');
+  const days = (input.days as Input[]).map((d) => {
+    const meals = Array.isArray(d.meals) ? (d.meals as Input[]) : [];
+    if (!meals.length) throw new ToolInputError(`Dag "${String(d.label)}" heeft geen maaltijden.`);
+    return {
+      label: str(d, 'label').slice(0, 30),
+      meals: meals.map((m) => ({
+        meal: meal(m.meal),
+        name: str(m, 'name').slice(0, 80),
+        items: mealItems(m.items),
+      })),
+    };
+  });
+  const shopping = (Array.isArray(input.shopping_list) ? input.shopping_list : [])
+    .filter((x): x is string => typeof x === 'string' && !!x.trim())
+    .slice(0, 80)
+    .map((name) => ({ name: name.trim().slice(0, 80), done: false }));
+  useStore.getState().setWeekMenu({ title, days, shopping });
+  const perDay = days.map((d) => {
+    const t = sumMacros(d.meals.flatMap((m) => m.items));
+    return { label: d.label, kcal: Math.round(t.kcal), protein: Math.round(t.protein) };
+  });
+  return {
+    result: { saved: true, days: perDay, goals: useStore.getState().goals },
+    action: {
+      label: `Weekmenu "${title}" · ${days.length} ${days.length === 1 ? 'dag' : 'dagen'} · ${shopping.length} boodschappen`,
+      link: '/menu',
+    },
+  };
+}
+
 // ───────────────────────── dispatcher ─────────────────────────
 
 const READERS: Record<string, (input: Input) => unknown> = {
@@ -1585,6 +1871,7 @@ const READERS: Record<string, (input: Input) => unknown> = {
   get_plans: getPlans,
   get_recovery: getRecovery,
   get_week_report: getWeekReport,
+  get_body_analysis: getBodyAnalysis,
 };
 
 const WRITERS: Record<string, (input: Input) => Write> = {
@@ -1612,6 +1899,12 @@ const WRITERS: Record<string, (input: Input) => Write> = {
   set_phase: setPhase,
   set_habits: setHabits,
   check_habit: checkHabit,
+  save_plan: savePlan,
+  log_measurements: logMeasurements,
+  save_meal: saveMealTool,
+  log_saved_meal: logSavedMeal,
+  delete_saved_meal: deleteSavedMeal,
+  save_week_menu: saveWeekMenu,
 };
 
 const READ_LABELS: Record<string, string> = {
@@ -1622,6 +1915,7 @@ const READ_LABELS: Record<string, string> = {
   get_plans: 'Schema’s bekeken',
   get_recovery: 'Slaap en herstel bekeken',
   get_week_report: 'Weekrapport bekeken',
+  get_body_analysis: 'Lichaam en voortgang geanalyseerd',
 };
 
 export function runTool(name: string, rawInput: unknown): ToolOutcome {
