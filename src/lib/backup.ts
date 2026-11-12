@@ -4,7 +4,7 @@ import { dateKey } from '@/lib/format';
 import { type Store, completeSettings, useStore } from '@/store/store';
 
 /** Everything the user logged or configured. The API key is never included. */
-const DATA_KEYS = [
+export const DATA_KEYS = [
   'customExercises',
   'plans',
   'activePlanId',

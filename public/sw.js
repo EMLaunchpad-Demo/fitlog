@@ -6,7 +6,10 @@
  *   file names contain a content hash, so a cached copy never goes stale.
  * - Other files (manifest, icons): network first, cache as offline fallback,
  *   so a new icon or theme colour shows up.
- * - Requests to other sites (the Claude API) are never touched.
+ * - Requests to other sites (the Claude API) and to this app's own API are
+ *   never touched.
+ * - Reminder notifications: shows the message a push carries and opens the app
+ *   on the right screen when it is tapped.
  *
  * Bump CACHE when the caching rules change; old caches are deleted on activate.
  */
@@ -35,6 +38,8 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  // The API (backup, reminders) always goes to the network and is never cached.
+  if (url.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(
@@ -64,4 +69,38 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(fetch(request).then(store).catch(() => caches.match(request)));
+});
+
+self.addEventListener('push', (event) => {
+  let message = {};
+  try {
+    message = event.data ? event.data.json() : {};
+  } catch {
+    // A push without a readable message still has to show something (iOS requires it).
+  }
+  event.waitUntil(
+    self.registration.showNotification(message.title || 'Fitlog', {
+      body: message.body || 'Tijd voor je herinnering.',
+      tag: message.tag || 'fitlog',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: message.url || '/' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      for (const client of windows) {
+        if ('focus' in client) {
+          if ('navigate' in client) client.navigate(url).catch(() => {});
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
 });

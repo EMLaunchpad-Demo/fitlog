@@ -107,6 +107,15 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 - Doelen instellen, of laten berekenen (Mifflin-St Jeor) op basis van lengte, gewicht,
   leeftijd, activiteit en doel
 
+**Back-up & herinneringen** (alleen in de web-app, via Instellingen)
+- **Automatische back-up:** na elke wijziging bewaart de app een versleutelde kopie op je eigen
+  Cloudflare Worker. De sleutel komt uit een herstelcode die alleen jij hebt; de server ziet
+  alleen versleutelde gegevens en er is geen account of wachtwoord. Met de code zet je alles
+  terug op een nieuw toestel. Slaan twee toestellen tegelijk op, dan kies je welke versie telt
+- **Herinneringen:** meldingen voor wegen, check-in, schermen uit, bedtijd en voeding, op
+  tijden die je slaapschema volgen of die je zelf kiest. Op iPhone alleen voor de app op je
+  beginscherm (iOS 16.4 of nieuwer)
+
 **Persoonlijke setup**
 - Persoonlijke cijfers (doelen, slaapschema, rustdagen, fase, schema's) staan niet in de code.
   Je laadt ze in één keer met een setup-code via Instellingen → Persoonlijke setup laden, of
@@ -134,6 +143,30 @@ ook zonder internet. Je hebt geen Apple Developer-account of Mac nodig.
 
 Lokaal testen zoals op Cloudflare: `npx wrangler dev`, en dan de web-app-test met
 `BASE_URL=http://localhost:8787 node e2e/web-build.e2e.js`.
+
+### De server (`worker/index.js`)
+
+Naast de statische bestanden draait er een kleine Worker voor twee dingen:
+
+- `/api/sync/…`: de versleutelde back-up opslaan en ophalen. De app versleutelt op het toestel
+  (AES-GCM, sleutel via PBKDF2 uit de herstelcode, zie `src/lib/cloud.ts`); de Worker bewaart
+  alleen de versleutelde tekst onder een id dat ook uit de code is afgeleid.
+- `/api/push/…` en een cron om de vijf minuten: herinneringen versturen via Web Push. De
+  Worker maakt zelf zijn sleutelpaar (VAPID) en versleutelt elke melding voor het toestel dat
+  hem krijgt (RFC 8291).
+
+Opslag is één KV-namespace (binding `KV` in `wrangler.jsonc`); het id daar hoort bij het
+Cloudflare-account van deze deploy. Zet je de app op een eigen account, maak dan een eigen
+namespace (`npx wrangler kv namespace create fitlog-data`) en vul dat id in. Er zijn geen
+geheimen om in te stellen.
+
+Grenzen, zodat vreemden de opslag niet kunnen vullen: hooguit 3 back-ups van elk maximaal
+3 MB en 5 toestellen met herinneringen. Preview-deploys van branches krijgen geen opslag; de
+API antwoordt daar "unavailable".
+
+Testen: `npm run test:cloud` start zelf `wrangler dev` met lege opslag en test de API, de
+back-up tussen twee toestellen en de herinneringen (handtekening gecontroleerd, melding
+ontsleuteld met een onafhankelijke bibliotheek).
 
 Goed om te weten:
 - Je gegevens staan in de opslag van de web-app op je iPhone. Maak af en toe een back-up via
@@ -223,6 +256,7 @@ src/
     body.tsx           lichaamsmaten
     menu.tsx           weekmenu van de coach
     scan.tsx           barcodescanner
+    cloud.tsx          automatische back-up en herinneringen
     coach.tsx          AI-coach (chat)
     coach-settings.tsx API-key, model en verbruik
   ai/                  Claude-client, agent-loop, tools, systeemprompt, foto's, key-opslag,
@@ -241,6 +275,7 @@ npm run typecheck
 npm run lint
 npm run test:e2e        # met `npx expo start --web` in een tweede terminal
 npm run test:web-build  # bouwt en test de web-app
+npm run test:cloud      # server, automatische back-up en herinneringen (start wrangler dev)
 ```
 
 Zie `e2e/README.md` voor de end-to-end tests.

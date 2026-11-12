@@ -297,6 +297,13 @@ export default function GoalsScreen() {
         />
         <Divider />
         <ListRow
+          title="Back-up & herinneringen"
+          subtitle="Automatische versleutelde back-up en meldingen"
+          left={<Icon name="cloud" size={20} color={c.accent} />}
+          onPress={() => router.push('/cloud')}
+        />
+        <Divider />
+        <ListRow
           title="Persoonlijke setup laden"
           subtitle="Alles in één keer instellen met een setup-code"
           left={<Icon name="download" size={20} color={c.accent} />}
