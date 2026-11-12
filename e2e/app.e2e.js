@@ -168,7 +168,9 @@ const scheme = process.argv[2] || 'light';
   await page.getByText('82,4').filter({ visible: true }).first().waitFor();
 
   // ── Plans ──
-  await click(page.getByText("Schema's", { exact: true }).filter({ visible: true }).last());
+  // Schema's live under Trainen now.
+  await click(page.getByText('Trainen', { exact: true }).filter({ visible: true }).last());
+  await click(page.getByText('Schema’s', { exact: true }).filter({ visible: true }));
   await page.getByText('Actief schema').filter({ visible: true }).first().waitFor();
   await shot('15-plans');
   await click(page.getByText('Push / Pull / Legs').filter({ visible: true }));
@@ -183,8 +185,13 @@ const scheme = process.argv[2] || 'light';
   await page.goto(BASE);
   await page.getByText('Volgende training').filter({ visible: true }).first().waitFor({ timeout: 30000 });
   const text = await page.innerText('body');
+  // After training today, Vandaag shows "Training gedaan"; the active plan is on Trainen.
+  await page.goto(BASE + '/train');
+  await page.getByText('Nieuwe training').filter({ visible: true }).first().waitFor({ timeout: 30000 });
+  const trainText = await page.innerText('body');
   const checks = {
-    'active plan switched to PPL': text.includes('Push / Pull / Legs'),
+    'training done card on Vandaag': /training gedaan/i.test(text),
+    'active plan switched to PPL': trainText.includes('Push / Pull / Legs'),
     'weight persisted': text.includes('82,4'),
     'trained this week': /\d training(en)? deze week/.test(text),
   };

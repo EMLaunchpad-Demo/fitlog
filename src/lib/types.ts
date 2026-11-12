@@ -141,3 +141,98 @@ export interface BodyWeight {
   kg: number;
   composition?: BodyComposition;
 }
+
+// ───────────────────────── Sleep, cardio, recovery ─────────────────────────
+
+/** One night, stored under the date you woke up. Times are "HH:MM" (24 h). */
+export interface SleepEntry {
+  id: string;
+  date: string;
+  bed: string;
+  wake: string;
+  /** Minutes actually asleep (from a tracker); time in bed is used when missing. */
+  asleepMin?: number;
+  /** 1 (slecht) – 5 (top) */
+  quality?: number;
+  note?: string;
+}
+
+export type CardioKind =
+  | 'wandelen'
+  | 'lopen'
+  | 'fietsen'
+  | 'zwemmen'
+  | 'roeien'
+  | 'crosstrainer'
+  | 'sport'
+  | 'hiit'
+  | 'werk'
+  | 'anders';
+
+/** licht = makkelijk praten, matig = zone 2 (praten lukt nog), zwaar = hijgen. */
+export type Intensity = 'licht' | 'matig' | 'zwaar';
+
+export interface CardioSession {
+  id: string;
+  date: string;
+  kind: CardioKind;
+  minutes: number;
+  intensity: Intensity;
+  distanceKm?: number;
+  avgHr?: number;
+  /** Own value from a watch; otherwise estimated from MET × body weight. */
+  kcal?: number;
+  note?: string;
+  createdAt: number;
+}
+
+/** Morning check-in. Every score is 1 (slecht) – 5 (top); higher is always better. */
+export interface CheckIn {
+  date: string;
+  energy: number;
+  /** 5 = geen spierpijn */
+  soreness: number;
+  /** 5 = ontspannen */
+  stress: number;
+  mood: number;
+  note?: string;
+}
+
+export interface Habit {
+  id: string;
+  name: string;
+}
+
+export type PhaseType = 'cut' | 'onderhoud' | 'bulk';
+
+/** A diet phase with a target rate of weight change. */
+export interface Phase {
+  type: PhaseType;
+  start: string;
+  end?: string;
+  /** Target change in % of body weight per week (negative = afvallen). */
+  ratePct: number;
+}
+
+/** Personal targets and preferences; everything here can be changed in Instellingen or by the coach. */
+export interface Settings {
+  sex: 'man' | 'vrouw';
+  birthYear: number | null;
+  heightCm: number | null;
+  sleep: {
+    /** Screens off; null = geen herinnering */
+    screensOff: string | null;
+    bedtime: string;
+    wake: string;
+  };
+  stepGoal: number;
+  /** Minutes per week, moderate-equivalent (zware minuten tellen dubbel). */
+  cardioGoalMin: number;
+  /** Fixed rest days, 0 = maandag … 6 = zondag. */
+  restDays: number[];
+  /** Suggest a deload after this many training weeks; 0 = nooit. */
+  deloadEveryWeeks: number;
+  /** Monday (YYYY-MM-DD) of the most recent deload week. */
+  lastDeloadWeek: string | null;
+  phase: Phase | null;
+}

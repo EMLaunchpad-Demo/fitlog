@@ -2,11 +2,14 @@ import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
 
+import { Icon } from '@/components/icon';
 import {
   Button,
   Card,
   Chip,
+  Divider,
   HeaderButton,
+  ListRow,
   NumberField,
   Row,
   SectionTitle,
@@ -20,12 +23,18 @@ import {
 import { exportBackup, pickBackupFile, restoreBackup, summarizeBackup } from '@/lib/backup';
 import { num } from '@/lib/format';
 import { ACTIVITY, type Activity, type GoalType, type Sex, calculateGoals } from '@/lib/nutrition';
-import { space } from '@/lib/theme';
+import { PHASE_LABEL } from '@/lib/phase';
+import { ageFromBirthYear } from '@/lib/recovery';
+import { space, useColors } from '@/lib/theme';
 import { useStore } from '@/store/store';
 
 const REST_CHOICES = [60, 90, 120, 180];
+const DELOAD_CHOICES = [0, 4, 6, 8];
 
 export default function GoalsScreen() {
+  const c = useColors();
+  const settings = useStore((s) => s.settings);
+  const setSettings = useStore((s) => s.setSettings);
   const goals = useStore((s) => s.goals);
   const setGoals = useStore((s) => s.setGoals);
   const defaultRestSec = useStore((s) => s.defaultRestSec);
@@ -38,17 +47,27 @@ export default function GoalsScreen() {
   const [fat, setFat] = useState<number | null>(goals.fat);
   const [water, setWater] = useState<number | null>(goals.waterGlasses);
 
-  const [sex, setSex] = useState<Sex>('man');
-  const [age, setAge] = useState<number | null>(30);
-  const [height, setHeight] = useState<number | null>(180);
+  const [sex, setSex] = useState<Sex>(settings.sex);
+  const [birthYear, setBirthYear] = useState<number | null>(settings.birthYear);
+  const [height, setHeight] = useState<number | null>(settings.heightCm ?? 180);
   const [weight, setWeight] = useState<number | null>(lastWeight ?? 80);
   const [activity, setActivity] = useState<Activity>('gemiddeld');
-  const [goalType, setGoalType] = useState<GoalType>('onderhouden');
+  const [goalType, setGoalType] = useState<GoalType>(
+    settings.phase?.type === 'cut'
+      ? 'afvallen'
+      : settings.phase?.type === 'bulk'
+        ? 'aankomen'
+        : 'onderhouden',
+  );
+  const [stepGoal, setStepGoal] = useState<number | null>(settings.stepGoal);
+  const [cardioGoal, setCardioGoal] = useState<number | null>(settings.cardioGoalMin);
+  const [deloadEvery, setDeloadEvery] = useState(settings.deloadEveryWeeks);
+  const age = ageFromBirthYear(birthYear) ?? 30;
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   const calculate = () => {
-    if (!age || !height || !weight) return;
+    if (!height || !weight) return;
     const r = calculateGoals({
       sex,
       age,
@@ -70,6 +89,14 @@ export default function GoalsScreen() {
       carbs: carbs ?? goals.carbs,
       fat: fat ?? goals.fat,
       waterGlasses: water ?? goals.waterGlasses,
+    });
+    setSettings({
+      sex,
+      birthYear: ageFromBirthYear(birthYear) != null ? birthYear : null,
+      heightCm: height && height >= 100 && height <= 250 ? Math.round(height) : settings.heightCm,
+      stepGoal: stepGoal && stepGoal >= 1000 ? Math.round(stepGoal) : settings.stepGoal,
+      cardioGoalMin: cardioGoal != null && cardioGoal >= 0 ? Math.round(cardioGoal) : settings.cardioGoalMin,
+      deloadEveryWeeks: deloadEvery,
     });
     success();
     close();
@@ -138,10 +165,11 @@ export default function GoalsScreen() {
         />
         <Row gap={space.sm}>
           <NumberField
-            label="Leeftijd"
-            value={age}
-            onChange={setAge}
+            label="Geboortejaar"
+            value={birthYear}
+            onChange={setBirthYear}
             decimals={false}
+            placeholder="jjjj"
             style={{ flex: 1 }}
           />
           <NumberField
@@ -181,8 +209,32 @@ export default function GoalsScreen() {
         />
         <Button label="Bereken doelen" variant="secondary" onPress={calculate} />
         <Txt variant="small">
-          Op basis van de Mifflin-St Jeor-formule. Eiwit 1,8 g per kg (2 g bij afvallen), vet 25%
-          van je energie. Een schatting: stuur bij op basis van je gewichtsverloop.
+          Op basis van de Mifflin-St Jeor-formule{birthYear ? '' : ' (zonder geboortejaar reken ik met 30 jaar)'}.
+          Eiwit 1,8 g per kg (2 g bij afvallen), vet 25% van je energie. Een schatting: stuur bij op
+          basis van je gewichtsverloop bij Voortgang.
+        </Txt>
+      </Card>
+
+      <SectionTitle title="Beweging" />
+      <Card>
+        <Row gap={space.sm}>
+          <NumberField
+            label="Stappen per dag"
+            value={stepGoal}
+            onChange={setStepGoal}
+            decimals={false}
+            style={{ flex: 1 }}
+          />
+          <NumberField
+            label="Cardio per week (min)"
+            value={cardioGoal}
+            onChange={setCardioGoal}
+            decimals={false}
+            style={{ flex: 1 }}
+          />
+        </Row>
+        <Txt variant="small">
+          Cardiominuten op matige inspanning; zware minuten tellen dubbel.
         </Txt>
       </Card>
 
@@ -199,13 +251,55 @@ export default function GoalsScreen() {
             />
           ))}
         </Row>
+        <Txt variant="small">Herinner me aan een deloadweek na</Txt>
+        <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+          {DELOAD_CHOICES.map((w) => (
+            <Chip
+              key={w}
+              label={w === 0 ? 'Nooit' : `${w} weken`}
+              selected={deloadEvery === w}
+              onPress={() => setDeloadEvery(w)}
+            />
+          ))}
+        </Row>
+      </Card>
+
+      <SectionTitle title="Meer instellen" />
+      <Card style={{ paddingVertical: space.sm, gap: 0 }}>
+        <ListRow
+          title="Slaapschema"
+          subtitle={`${settings.sleep.bedtime} – ${settings.sleep.wake}`}
+          left={<Icon name="moon" size={20} color={c.accent} />}
+          onPress={() => router.push('/sleep')}
+        />
+        <Divider />
+        <ListRow
+          title="Fase"
+          subtitle={settings.phase ? PHASE_LABEL[settings.phase.type] : 'Cut, onderhoud of bulk'}
+          left={<Icon name="target" size={20} color={c.accent} />}
+          onPress={() => router.push('/phase')}
+        />
+        <Divider />
+        <ListRow
+          title="Coach"
+          subtitle="API-key, profiel en model"
+          left={<Icon name="sparkles" size={20} color={c.accent} />}
+          onPress={() => router.push('/coach-settings')}
+        />
+        <Divider />
+        <ListRow
+          title="Persoonlijke setup laden"
+          subtitle="Alles in één keer instellen met een setup-code"
+          left={<Icon name="download" size={20} color={c.accent} />}
+          onPress={() => router.push('/setup')}
+        />
       </Card>
 
       <SectionTitle title="Gegevens" />
       <Card>
         <Txt variant="small">
-          Maak af en toe een back-up van al je trainingen, voeding, wegingen, schema&apos;s en je
-          profiel. Je API-key zit er niet in.
+          Maak af en toe een back-up van al je trainingen, voeding, wegingen, slaap, cardio,
+          schema&apos;s en je profiel. Je API-key zit er niet in.
         </Txt>
         <Button
           label="Back-up maken"

@@ -80,7 +80,8 @@ export function calculateGoals(input: {
   const { sex, age, heightCm, weightKg, activity, goal } = input;
   const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + (sex === 'man' ? 5 : -161);
   const factor = ACTIVITY.find((a) => a.key === activity)?.factor ?? 1.55;
-  const adjust = goal === 'afvallen' ? 0.8 : goal === 'aankomen' ? 1.1 : 1;
+  // A slow cut (about 15 % under maintenance) keeps strength and muscle better than a steep one.
+  const adjust = goal === 'afvallen' ? 0.85 : goal === 'aankomen' ? 1.1 : 1;
   const kcal = Math.round((bmr * factor * adjust) / 10) * 10;
   const protein = Math.round(weightKg * (goal === 'afvallen' ? 2 : 1.8));
   const fat = Math.round((kcal * 0.25) / 9);

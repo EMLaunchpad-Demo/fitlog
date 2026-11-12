@@ -34,11 +34,14 @@ export default function AppTabs() {
         <TabTrigger name="train" href="/train" asChild>
           <TabButton icon="dumbbell" label="Trainen" />
         </TabTrigger>
-        <TabTrigger name="plans" href="/plans" asChild>
-          <TabButton icon="plans" label="Schema's" />
-        </TabTrigger>
         <TabTrigger name="food" href="/food" asChild>
           <TabButton icon="food" label="Voeding" />
+        </TabTrigger>
+        <TabTrigger name="recovery" href="/recovery" asChild>
+          <TabButton icon="moon" label="Herstel" />
+        </TabTrigger>
+        <TabTrigger name="progress" href="/progress" asChild>
+          <TabButton icon="progress" label="Voortgang" />
         </TabTrigger>
       </TabList>
     </Tabs>
@@ -78,5 +81,5 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   tab: { flex: 1, alignItems: 'center', gap: 2 },
-  pill: { width: 56, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  pill: { width: 50, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
 });

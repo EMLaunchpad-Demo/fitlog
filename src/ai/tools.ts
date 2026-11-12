@@ -3,13 +3,39 @@ import type { Href } from 'expo-router';
 
 import { BUILT_IN_EXERCISES, MUSCLE_GROUPS } from '@/data/exercises';
 import { BODY_METRICS, hasComposition } from '@/lib/body';
+import {
+  CARDIO_KINDS,
+  INTENSITIES,
+  cardioKcal,
+  cardioKind,
+  moderateEquivalent,
+  weekCardio,
+  weekSteps,
+} from '@/lib/cardio';
 import { addDays, dateKey, parseDateKey, relativeDay, uid } from '@/lib/format';
 import { MEALS, mealLabel, sumMacros } from '@/lib/nutrition';
+import { PHASE_LABEL, estimateEnergyUse, phaseProgress } from '@/lib/phase';
+import {
+  WEEKDAYS,
+  dayPlan,
+  deloadStatus,
+  readiness,
+  regularityLabel,
+  sleepMinutes,
+  sleepStats,
+  targetSleepMinutes,
+  weekKey,
+} from '@/lib/recovery';
+import { weekReport, weeklyMuscleSets } from '@/lib/report';
+import { hoursLabel, minutesBetween, normalizeTime } from '@/lib/time';
 import type {
   BodyComposition,
+  CardioKind,
   ExerciseKind,
+  Intensity,
   Meal,
   MuscleGroup,
+  Phase,
   Plan,
   PlanDay,
   Workout,
@@ -24,7 +50,13 @@ import {
   weeklyAverages,
   workoutVolume,
 } from '@/lib/workout-stats';
-import { type Store, findExercise, nextPlanDay, useStore } from '@/store/store';
+import {
+  type SettingsPatch,
+  type Store,
+  findExercise,
+  nextPlanDay,
+  useStore,
+} from '@/store/store';
 
 // ───────────────────────── schema helpers ─────────────────────────
 
@@ -116,7 +148,7 @@ export const TOOLS: BetaTool[] = [
   // ── Lezen ──
   tool(
     'get_overview',
-    'Snel overzicht: doelen, voeding en water van vandaag, lichaamsgewicht (weekgemiddelden van de laatste 8 weken en wegingen van de laatste 30 dagen), actief schema met de volgende trainingsdag, de laatste trainingen en de streak. Gebruik dit als eerste stap bij algemene vragen.',
+    'Snel overzicht: doelen, voeding en water van vandaag, lichaamsgewicht (weekgemiddelden van de laatste 8 weken en wegingen van de laatste 30 dagen), actief schema met de volgende trainingsdag, de laatste trainingen en de streak, plus vandaag: trainings- of rustdag, slaap van afgelopen nacht, check-in en herstelscore, stappen, cardio deze week, deload-status, de fase (cut/bulk) met het echte tempo, het geschatte verbruik, gewoontes en alle persoonlijke instellingen. Gebruik dit als eerste stap bij algemene vragen.',
     {},
   ),
   tool(
@@ -138,6 +170,16 @@ export const TOOLS: BetaTool[] = [
     'get_plans',
     'Alle trainingsschema’s met id’s: per dag de dag-id en per oefening exercise_id, sets, doel en rusttijd. Haal dit op voordat je een schema wijzigt, activeert of verwijdert.',
     {},
+  ),
+  tool(
+    'get_recovery',
+    'Slaap, check-ins (energie, spierpijn, stress, humeur) met herstelscore, stappen en cardio per dag voor de afgelopen N dagen, plus slaapstatistieken, het slaapschema, vaste rustdagen, deload-status en gewoontes. Cardiosessies hebben een id.',
+    { days: { type: 'integer', description: 'Aantal dagen terug, max 60' } },
+  ),
+  tool(
+    'get_week_report',
+    'Weekrapport (maandag t/m zondag): trainingen, sets per spiergroep, gemiddelde kcal en eiwit met het aantal dagen op doel, slaap, stappen, cardio, gewicht en energie. Geeft ook de week ervoor ter vergelijking.',
+    { weeks_back: { type: 'integer', description: '0 = deze week, 1 = vorige week, max 12' } },
   ),
 
   // ── Voeding ──
@@ -268,6 +310,100 @@ export const TOOLS: BetaTool[] = [
     workout_id: { type: 'string' },
   }),
 
+  // ── Slaap, cardio, herstel ──
+  tool(
+    'log_sleep',
+    'Slaat een nacht op (vervangt de nacht van dezelfde datum). date is de datum van het OPSTAAN. Tijden als "HH:MM" (24 uur). asleep_min alleen als een tracker de echte slaaptijd toont; anders telt de tijd tussen bed en wake.',
+    {
+      date: OPT_DATE,
+      bed: { type: 'string', description: 'Tijd van inslapen / licht uit, bijv. "22:15"' },
+      wake: { type: 'string', description: 'Tijd van wakker worden, bijv. "06:45"' },
+      asleep_min: nullable({ type: 'integer', description: 'Gemeten slaaptijd in minuten' }),
+      quality: nullable({ type: 'integer', description: '1 (slecht) t/m 5 (top)' }),
+      note: nullable({ type: 'string' }),
+    },
+    false,
+  ),
+  tool('delete_sleep', 'Verwijdert de nacht van een datum (datum van opstaan).', { date: DATE }, false),
+  tool(
+    'log_cardio',
+    'Legt een cardiosessie vast (wandelen, lopen, fietsen, sport, fysiek werk enz.). intensity: licht = zingen lukt nog, matig = zone 2 (praten lukt, zingen niet), zwaar = maar een paar woorden per adem. kcal alleen als een horloge of app het toont.',
+    {
+      date: OPT_DATE,
+      kind: { type: 'string', enum: CARDIO_KINDS.map((k) => k.key) },
+      minutes: { type: 'integer' },
+      intensity: { type: 'string', enum: INTENSITIES.map((i) => i.key) },
+      distance_km: nullable({ type: 'number' }),
+      avg_hr: nullable({ type: 'integer' }),
+      kcal: nullable({ type: 'integer' }),
+      note: nullable({ type: 'string' }),
+    },
+    false,
+  ),
+  tool('delete_cardio', 'Verwijdert een cardiosessie (id uit get_recovery).', {
+    cardio_id: { type: 'string' },
+  }, false),
+  tool('set_steps', 'Zet het aantal stappen van een dag (0 wist de dag).', {
+    date: OPT_DATE,
+    steps: { type: 'integer' },
+  }),
+  tool(
+    'log_check_in',
+    'Slaat de dagelijkse check-in op (vervangt die van dezelfde datum). Alle scores 1 t/m 5, hoger is altijd beter: energy 5 = vol energie, soreness 5 = geen spierpijn, stress 5 = ontspannen, mood 5 = top.',
+    {
+      date: OPT_DATE,
+      energy: { type: 'integer' },
+      soreness: { type: 'integer' },
+      stress: { type: 'integer' },
+      mood: { type: 'integer' },
+      note: nullable({ type: 'string' }),
+    },
+  ),
+  tool(
+    'update_settings',
+    'Past persoonlijke instellingen aan. Geef alleen de velden mee die moeten veranderen. rest_days is de volledige lijst vaste rustdagen. screens_off "" verwijdert de schermen-uit-tijd. deload_this_week zet de deloadweek aan of uit.',
+    {
+      bedtime: { type: 'string', description: 'Licht uit, "HH:MM"' },
+      wake_time: { type: 'string', description: 'Opstaan, "HH:MM"' },
+      screens_off: { type: 'string', description: 'Schermen uit, "HH:MM", of "" voor geen' },
+      step_goal: { type: 'integer', description: 'Stappen per dag' },
+      cardio_goal_min: {
+        type: 'integer',
+        description: 'Cardiominuten per week (matig; zwaar telt dubbel)',
+      },
+      rest_days: { type: 'array', items: { type: 'string', enum: WEEKDAYS } },
+      deload_every_weeks: { type: 'integer', description: '0 = geen herinnering' },
+      deload_this_week: { type: 'boolean' },
+      sex: { type: 'string', enum: ['man', 'vrouw'] },
+      birth_year: { type: 'integer' },
+      height_cm: { type: 'integer' },
+    },
+    false,
+  ),
+  tool(
+    'set_phase',
+    'Stelt de voedingsfase in: cut, onderhoud of bulk, met start, optioneel einde en het doeltempo in % lichaamsgewicht per week (positief getal; de app maakt het negatief bij een cut). type "geen" verwijdert de fase.',
+    {
+      type: { type: 'string', enum: ['cut', 'onderhoud', 'bulk', 'geen'] },
+      start: nullable(DATE),
+      end: nullable(DATE),
+      rate_pct: nullable({ type: 'number', description: 'Bijv. 0.5; null = standaard voor de fase' }),
+    },
+    false,
+  ),
+  tool(
+    'set_habits',
+    'Vervangt de lijst dagelijkse gewoontes (max 12). Geef de VOLLEDIGE lijst namen; bestaande namen houden hun afvinkgeschiedenis.',
+    { habits: { type: 'array', items: { type: 'string' } } },
+    false,
+  ),
+  tool(
+    'check_habit',
+    'Vinkt een gewoonte af of weer uit voor een dag. Geef (een deel van) de naam.',
+    { habit: { type: 'string' }, done: { type: 'boolean' }, date: OPT_DATE },
+    false,
+  ),
+
   // ── Profiel ──
   tool(
     'update_profile',
@@ -302,7 +438,14 @@ export type DataKey =
   | 'goals'
   | 'bodyWeights'
   | 'workouts'
-  | 'profile';
+  | 'profile'
+  | 'sleepLog'
+  | 'cardioLog'
+  | 'steps'
+  | 'checkIns'
+  | 'habits'
+  | 'habitLog'
+  | 'settings';
 export type DataSnapshot = Partial<Pick<Store, DataKey>>;
 
 export interface UndoRecord {
@@ -334,6 +477,16 @@ const WRITES: Record<string, DataKey[]> = {
   log_workout: ['workouts', 'customExercises'],
   delete_workout: ['workouts'],
   update_profile: ['profile'],
+  log_sleep: ['sleepLog'],
+  delete_sleep: ['sleepLog'],
+  log_cardio: ['cardioLog'],
+  delete_cardio: ['cardioLog'],
+  set_steps: ['steps'],
+  log_check_in: ['checkIns'],
+  update_settings: ['settings'],
+  set_phase: ['settings'],
+  set_habits: ['habits'],
+  check_habit: ['habitLog'],
 };
 export const WRITE_TOOLS = new Set(Object.keys(WRITES));
 
@@ -474,6 +627,200 @@ function getOverview() {
       volume_kg: Math.round(workoutVolume(w)),
     })),
     workout_in_progress: s.activeWorkout ? s.activeWorkout.name : null,
+    ...recoveryOverview(),
+  };
+}
+
+/** Today's rest, sleep, movement and phase status, for get_overview. */
+function recoveryOverview() {
+  const s = useStore.getState();
+  const today = dateKey();
+  const plan = s.plans.find((p) => p.id === s.activePlanId);
+  const targetMin = targetSleepMinutes(s.settings.sleep);
+  const lastNight = s.sleepLog.find((e) => e.date === today);
+  const checkIn = s.checkIns.find((c) => c.date === today);
+  const ready = readiness(checkIn, lastNight, targetMin);
+  const day = dayPlan(s.settings, s.workouts, plan);
+  const deload = deloadStatus(s.settings, s.workouts);
+  const week = weekKey(0);
+  const cardio = weekCardio(s.cardioLog, week);
+  const stats = sleepStats(s.sleepLog, targetMin, 7);
+  const phase = s.settings.phase;
+  const progress = phase ? phaseProgress(phase, s.bodyWeights) : null;
+  const energy = estimateEnergyUse(s.foodLog, s.bodyWeights);
+  return {
+    day_plan:
+      day.kind === 'done'
+        ? 'training gedaan'
+        : day.kind === 'rest'
+          ? `rustdag (${day.reason === 'vast' ? 'vaste rustdag' : 'weekdoel gehaald'})`
+          : 'trainingsdag',
+    settings: settingsView(),
+    sleep_last_night: lastNight ? sleepView(lastNight) : null,
+    sleep_7_days: stats
+      ? {
+          nights: stats.nights,
+          avg_min: stats.avgMin,
+          avg_bed: stats.avgBed,
+          avg_wake: stats.avgWake,
+          regularity: regularityLabel(stats),
+          debt_min: stats.debtMin,
+        }
+      : null,
+    check_in_today: checkIn ?? null,
+    readiness_today: ready ? { score: ready.score, level: ready.level } : null,
+    steps_today: s.steps[today] ?? null,
+    cardio_this_week: {
+      sessions: cardio.sessions,
+      minutes: cardio.minutes,
+      moderate_equivalent_min: cardio.moderateEq,
+    },
+    deload: {
+      active_this_week: deload.active,
+      training_weeks_since: deload.weeksSince,
+      due: deload.due,
+    },
+    phase: phase
+      ? {
+          ...phase,
+          day: progress!.dayNo,
+          total_days: progress!.totalDays,
+          days_left: progress!.daysLeft,
+          start_kg: progress!.startKg != null ? r1(progress!.startKg) : null,
+          trend_kg: progress!.currentKg != null ? r1(progress!.currentKg) : null,
+          actual_rate_pct_per_week:
+            progress!.ratePct != null ? Math.round(progress!.ratePct * 100) / 100 : null,
+          status: progress!.status,
+          suggested_kcal_change: progress!.kcalAdjust,
+        }
+      : null,
+    estimated_energy_use: energy
+      ? { kcal_per_day: energy.tdee, avg_intake: energy.avgIntake, logged_days: energy.loggedDays }
+      : null,
+    habits_today: s.habits.map((h) => ({
+      name: h.name,
+      done: (s.habitLog[today] ?? []).includes(h.id),
+    })),
+  };
+}
+
+function settingsView() {
+  const st = useStore.getState().settings;
+  return {
+    sex: st.sex,
+    birth_year: st.birthYear,
+    height_cm: st.heightCm,
+    bedtime: st.sleep.bedtime,
+    wake_time: st.sleep.wake,
+    screens_off: st.sleep.screensOff,
+    sleep_target_min: targetSleepMinutes(st.sleep),
+    step_goal: st.stepGoal,
+    cardio_goal_min_per_week: st.cardioGoalMin,
+    rest_days: st.restDays.map((d) => WEEKDAYS[d]),
+    deload_every_weeks: st.deloadEveryWeeks,
+  };
+}
+
+function sleepView(e: Store['sleepLog'][number]) {
+  return {
+    date: e.date,
+    bed: e.bed,
+    wake: e.wake,
+    minutes: sleepMinutes(e),
+    measured: e.asleepMin != null,
+    quality: e.quality ?? null,
+    note: e.note ?? null,
+  };
+}
+
+function getRecovery(input: Input) {
+  const days = Math.round(num(input, 'days', 1, 60));
+  const s = useStore.getState();
+  const today = dateKey();
+  const from = addDays(today, -(days - 1));
+  const targetMin = targetSleepMinutes(s.settings.sleep);
+  const weightKg = s.bodyWeights[s.bodyWeights.length - 1]?.kg ?? null;
+  const perDay: Record<string, unknown> = {};
+  for (let d = from; d <= today; d = addDays(d, 1)) {
+    const sleep = s.sleepLog.find((e) => e.date === d);
+    const checkIn = s.checkIns.find((c) => c.date === d);
+    const cardio = s.cardioLog.filter((c) => c.date === d);
+    const steps = s.steps[d];
+    if (!sleep && !checkIn && !cardio.length && steps == null) continue;
+    const ready = readiness(checkIn, sleep, targetMin);
+    perDay[d] = {
+      ...(sleep ? { sleep: sleepView(sleep) } : {}),
+      ...(checkIn ? { check_in: checkIn } : {}),
+      ...(ready ? { readiness: ready.score } : {}),
+      ...(steps != null ? { steps } : {}),
+      ...(cardio.length
+        ? {
+            cardio: cardio.map((c) => ({
+              id: c.id,
+              kind: c.kind,
+              minutes: c.minutes,
+              intensity: c.intensity,
+              distance_km: c.distanceKm ?? null,
+              avg_hr: c.avgHr ?? null,
+              kcal: cardioKcal(c, weightKg),
+              note: c.note ?? null,
+            })),
+          }
+        : {}),
+    };
+  }
+  const stats = sleepStats(s.sleepLog, targetMin, Math.min(days, 14));
+  const deload = deloadStatus(s.settings, s.workouts);
+  return {
+    settings: settingsView(),
+    days: perDay,
+    sleep_stats: stats
+      ? {
+          nights: stats.nights,
+          avg_min: stats.avgMin,
+          avg_bed: stats.avgBed,
+          avg_wake: stats.avgWake,
+          bed_spread_min: stats.bedSpreadMin,
+          wake_spread_min: stats.wakeSpreadMin,
+          regularity: regularityLabel(stats),
+          debt_min: stats.debtMin,
+        }
+      : null,
+    steps_this_week: weekSteps(s.steps, weekKey(0)),
+    cardio_this_week: weekCardio(s.cardioLog, weekKey(0)),
+    deload: {
+      active_this_week: deload.active,
+      training_weeks_since: deload.weeksSince,
+      due: deload.due,
+    },
+    habits: s.habits.map((h) => ({
+      name: h.name,
+      done_today: (s.habitLog[today] ?? []).includes(h.id),
+      done_last_7_days: Array.from({ length: 7 }, (_, i) => addDays(today, -i)).filter((d) =>
+        (s.habitLog[d] ?? []).includes(h.id),
+      ).length,
+    })),
+  };
+}
+
+function getWeekReport(input: Input) {
+  const back = Math.round(num(input, 'weeks_back', 0, 12));
+  const s = useStore.getState();
+  const getExercise = (id: string) => findExercise(id, s.customExercises);
+  const build = (weeksBack: number) => {
+    const weekStart = weekKey(weeksBack);
+    return {
+      ...weekReport(weekStart, s),
+      sets_per_muscle: weeklyMuscleSets(s.workouts, weekStart, getExercise),
+    };
+  };
+  return {
+    goals: s.goals,
+    sleep_target_min: targetSleepMinutes(s.settings.sleep),
+    step_goal: s.settings.stepGoal,
+    cardio_goal_min: s.settings.cardioGoalMin,
+    week: build(back),
+    week_before: build(back + 1),
   };
 }
 
@@ -925,6 +1272,309 @@ function updateProfile(input: Input): Write {
   };
 }
 
+// ───────────────────────── sleep, cardio, recovery ─────────────────────────
+
+function time(input: Input, key: string): string {
+  const v = input[key];
+  const t = typeof v === 'string' ? normalizeTime(v) : null;
+  if (!t) throw new ToolInputError(`"${key}" moet een tijd zijn zoals "22:15".`);
+  return t;
+}
+const optStr = (input: Input, key: string) =>
+  typeof input[key] === 'string' && (input[key] as string).trim()
+    ? (input[key] as string).trim().slice(0, 200)
+    : null;
+const suffix = (d: string) => (d === dateKey() ? '' : ` (${day(d)})`);
+
+function logSleep(input: Input): Write {
+  const d = date(input, 'date');
+  const bed = time(input, 'bed');
+  const wake = time(input, 'wake');
+  const inBed = minutesBetween(bed, wake);
+  if (inBed < 60 || inBed > 16 * 60)
+    throw new ToolInputError('Tussen bed en wake moet 1 tot 16 uur zitten.');
+  const asleep = optNum(input, 'asleep_min', 30, inBed);
+  const quality = optNum(input, 'quality', 1, 5);
+  const note = optStr(input, 'note');
+  useStore.getState().logSleep({
+    date: d,
+    bed,
+    wake,
+    ...(asleep != null ? { asleepMin: Math.round(asleep) } : {}),
+    ...(quality != null ? { quality: Math.round(quality) } : {}),
+    ...(note ? { note } : {}),
+  });
+  const s = useStore.getState();
+  const targetMin = targetSleepMinutes(s.settings.sleep);
+  const minutes = asleep != null ? Math.round(asleep) : inBed;
+  const stats = sleepStats(s.sleepLog, targetMin, 7);
+  return {
+    result: {
+      saved: true,
+      date: d,
+      minutes,
+      target_min: targetMin,
+      avg_min_7_days: stats?.avgMin ?? null,
+    },
+    action: {
+      label: `Slaap ${hoursLabel(minutes)} · ${bed}–${wake}${suffix(d)}`,
+      link: '/sleep',
+    },
+  };
+}
+
+function deleteSleep(input: Input): Write {
+  const d = date(input, 'date', true);
+  if (!useStore.getState().sleepLog.some((e) => e.date === d))
+    throw new ToolInputError(`Geen nacht gelogd op ${d}.`);
+  useStore.getState().removeSleep(d);
+  return { result: { deleted: d }, action: { label: `Nacht van ${day(d)} verwijderd`, link: '/sleep' } };
+}
+
+function logCardio(input: Input): Write {
+  const d = date(input, 'date');
+  const kind = input.kind as CardioKind;
+  if (!CARDIO_KINDS.some((k) => k.key === kind)) throw new ToolInputError('Onbekende cardiosoort.');
+  const intensity = input.intensity as Intensity;
+  if (!INTENSITIES.some((i) => i.key === intensity))
+    throw new ToolInputError('intensity moet licht, matig of zwaar zijn.');
+  const minutes = Math.round(num(input, 'minutes', 1, 600));
+  const distance = optNum(input, 'distance_km', 0.05, 500);
+  const avgHr = optNum(input, 'avg_hr', 40, 230);
+  const kcal = optNum(input, 'kcal', 1, 10000);
+  const note = optStr(input, 'note');
+  const id = useStore.getState().addCardio({
+    date: d,
+    kind,
+    minutes,
+    intensity,
+    ...(distance != null ? { distanceKm: Math.round(distance * 100) / 100 } : {}),
+    ...(avgHr != null ? { avgHr: Math.round(avgHr) } : {}),
+    ...(kcal != null ? { kcal: Math.round(kcal) } : {}),
+    ...(note ? { note } : {}),
+  });
+  const s = useStore.getState();
+  const week = weekCardio(s.cardioLog, weekKey(0));
+  return {
+    result: {
+      saved: true,
+      cardio_id: id,
+      counts_towards_goal_min: moderateEquivalent({ minutes, intensity }),
+      week_moderate_equivalent_min: week.moderateEq,
+      week_goal_min: s.settings.cardioGoalMin,
+    },
+    action: {
+      label: `${cardioKind(kind).label} ${minutes} min · ${intensity}${distance != null ? ` · ${fmt(Math.round(distance * 100) / 100)} km` : ''}${suffix(d)}`,
+      link: '/cardio',
+    },
+  };
+}
+
+function deleteCardio(input: Input): Write {
+  const session = useStore.getState().cardioLog.find((c) => c.id === input.cardio_id);
+  if (!session)
+    throw new ToolInputError('Cardiosessie niet gevonden. Haal de id’s op met get_recovery.');
+  useStore.getState().removeCardio(session.id);
+  return {
+    result: { deleted: session.id },
+    action: {
+      label: `${cardioKind(session.kind).label} van ${day(session.date)} verwijderd`,
+      link: '/cardio',
+    },
+  };
+}
+
+function setStepsTool(input: Input): Write {
+  const d = date(input, 'date');
+  const steps = Math.round(num(input, 'steps', 0, 150000));
+  useStore.getState().setSteps(d, steps);
+  const s = useStore.getState();
+  return {
+    result: { date: d, steps, goal: s.settings.stepGoal, week: weekSteps(s.steps, weekKey(0)) },
+    action: {
+      label: `Stappen: ${steps.toLocaleString('nl-NL')}${suffix(d)}`,
+      link: '/cardio',
+    },
+  };
+}
+
+function logCheckIn(input: Input): Write {
+  const d = date(input, 'date');
+  const score = (key: string) => Math.round(num(input, key, 1, 5));
+  const note = optStr(input, 'note');
+  const checkIn = {
+    date: d,
+    energy: score('energy'),
+    soreness: score('soreness'),
+    stress: score('stress'),
+    mood: score('mood'),
+    ...(note ? { note } : {}),
+  };
+  useStore.getState().saveCheckIn(checkIn);
+  const s = useStore.getState();
+  const ready = readiness(
+    checkIn,
+    s.sleepLog.find((e) => e.date === d),
+    targetSleepMinutes(s.settings.sleep),
+  );
+  return {
+    result: { saved: true, date: d, readiness: ready ? ready.score : null, level: ready?.level },
+    action: {
+      label: `Check-in${ready ? `: herstel ${ready.score}/100` : ''}${suffix(d)}`,
+      link: '/recovery',
+    },
+  };
+}
+
+function updateSettings(input: Input): Write {
+  const patch: SettingsPatch = {};
+  const sleep: NonNullable<SettingsPatch['sleep']> = {};
+  const changed: string[] = [];
+  if (input.bedtime != null) {
+    sleep.bedtime = time(input, 'bedtime');
+    changed.push(`licht uit ${sleep.bedtime}`);
+  }
+  if (input.wake_time != null) {
+    sleep.wake = time(input, 'wake_time');
+    changed.push(`opstaan ${sleep.wake}`);
+  }
+  if (typeof input.screens_off === 'string') {
+    sleep.screensOff = input.screens_off.trim() ? time(input, 'screens_off') : null;
+    changed.push(sleep.screensOff ? `schermen uit ${sleep.screensOff}` : 'geen schermtijd');
+  }
+  if (Object.keys(sleep).length) patch.sleep = sleep;
+  if (input.step_goal != null) {
+    patch.stepGoal = Math.round(num(input, 'step_goal', 1000, 50000));
+    changed.push(`${patch.stepGoal} stappen`);
+  }
+  if (input.cardio_goal_min != null) {
+    patch.cardioGoalMin = Math.round(num(input, 'cardio_goal_min', 0, 2000));
+    changed.push(`${patch.cardioGoalMin} min cardio per week`);
+  }
+  if (input.rest_days != null) {
+    if (!Array.isArray(input.rest_days) || input.rest_days.some((d) => !WEEKDAYS.includes(d)))
+      throw new ToolInputError(`rest_days: gebruik ${WEEKDAYS.join(', ')}.`);
+    if (input.rest_days.length > 6) throw new ToolInputError('Er moet minstens één trainingsdag overblijven.');
+    patch.restDays = [...new Set(input.rest_days.map((d) => WEEKDAYS.indexOf(d as string)))].sort();
+    changed.push(
+      patch.restDays.length
+        ? `rustdagen ${patch.restDays.map((d) => WEEKDAYS[d]).join(', ')}`
+        : 'geen vaste rustdagen',
+    );
+  }
+  if (input.deload_every_weeks != null) {
+    patch.deloadEveryWeeks = Math.round(num(input, 'deload_every_weeks', 0, 26));
+    changed.push(
+      patch.deloadEveryWeeks ? `deload na ${patch.deloadEveryWeeks} weken` : 'geen deload-herinnering',
+    );
+  }
+  if (input.sex != null) {
+    if (input.sex !== 'man' && input.sex !== 'vrouw') throw new ToolInputError('sex: man of vrouw.');
+    patch.sex = input.sex;
+    changed.push(input.sex);
+  }
+  if (input.birth_year != null) {
+    patch.birthYear = Math.round(num(input, 'birth_year', 1920, new Date().getFullYear() - 5));
+    changed.push(`geboortejaar ${patch.birthYear}`);
+  }
+  if (input.height_cm != null) {
+    patch.heightCm = Math.round(num(input, 'height_cm', 100, 250));
+    changed.push(`${patch.heightCm} cm`);
+  }
+  const store = useStore.getState();
+  if (Object.keys(patch).length) store.setSettings(patch);
+  if (typeof input.deload_this_week === 'boolean') {
+    store.setDeloadWeek(input.deload_this_week);
+    changed.push(input.deload_this_week ? 'deloadweek gestart' : 'deloadweek gestopt');
+  }
+  if (!changed.length) throw new ToolInputError('Geen velden om te wijzigen.');
+  return {
+    result: { saved: true, settings: settingsView() },
+    action: { label: `Instellingen: ${changed.join(' · ')}`, link: '/recovery' },
+  };
+}
+
+function setPhase(input: Input): Write {
+  const type = input.type;
+  if (type === 'geen') {
+    useStore.getState().setSettings({ phase: null });
+    return { result: { saved: true, phase: null }, action: { label: 'Fase verwijderd', link: '/progress' } };
+  }
+  if (type !== 'cut' && type !== 'onderhoud' && type !== 'bulk')
+    throw new ToolInputError('type: cut, onderhoud, bulk of geen.');
+  const start = date(input, 'start');
+  const end = input.end == null ? null : date(input, 'end', true);
+  if (end && end <= start) throw new ToolInputError('end moet na start liggen.');
+  const rate = optNum(input, 'rate_pct', 0, 2);
+  const magnitude = type === 'onderhoud' ? 0 : (rate ?? (type === 'cut' ? 0.5 : 0.25));
+  if (type === 'cut' && magnitude > 1)
+    throw new ToolInputError('Meer dan 1% per week afvallen is te snel; kies 1 of lager.');
+  const phase: Phase = {
+    type,
+    start,
+    ...(end ? { end } : {}),
+    ratePct: type === 'cut' ? -magnitude : magnitude,
+  };
+  useStore.getState().setSettings({ phase });
+  return {
+    result: { saved: true, phase },
+    action: {
+      label: `Fase: ${PHASE_LABEL[type]}${type === 'onderhoud' ? '' : ` ${fmt(magnitude)}% per week`}${end ? ` tot ${day(end)}` : ''}`,
+      link: '/progress',
+    },
+  };
+}
+
+function setHabits(input: Input): Write {
+  if (!Array.isArray(input.habits)) throw new ToolInputError('"habits" moet een lijst zijn.');
+  const names = [
+    ...new Set(
+      input.habits
+        .filter((h): h is string => typeof h === 'string' && !!h.trim())
+        .map((h) => h.trim().slice(0, 60)),
+    ),
+  ];
+  if (names.length > 12) throw new ToolInputError('Maximaal 12 gewoontes.');
+  const current = useStore.getState().habits;
+  // Keep the id of habits that stay, so their history survives.
+  useStore.setState({
+    habits: names.map(
+      (name) =>
+        current.find((h) => h.name.toLowerCase() === name.toLowerCase()) ?? { id: uid(), name },
+    ),
+  });
+  return {
+    result: { saved: true, habits: names },
+    action: {
+      label: names.length ? `Gewoontes: ${names.join(', ')}` : 'Gewoontes gewist',
+      link: '/recovery',
+    },
+  };
+}
+
+function checkHabit(input: Input): Write {
+  const query = str(input, 'habit').toLowerCase();
+  const d = date(input, 'date');
+  const s = useStore.getState();
+  const habit =
+    s.habits.find((h) => h.name.toLowerCase() === query) ??
+    s.habits.find((h) => h.name.toLowerCase().includes(query));
+  if (!habit)
+    throw new ToolInputError(
+      `Geen gewoonte "${query}". Bestaande: ${s.habits.map((h) => h.name).join(', ') || 'geen'}.`,
+    );
+  const want = input.done !== false;
+  const isDone = (s.habitLog[d] ?? []).includes(habit.id);
+  if (want !== isDone) s.toggleHabit(d, habit.id);
+  return {
+    result: { habit: habit.name, date: d, done: want },
+    action: {
+      label: `${habit.name}: ${want ? 'afgevinkt' : 'uitgevinkt'}${suffix(d)}`,
+      link: '/recovery',
+    },
+  };
+}
+
 // ───────────────────────── dispatcher ─────────────────────────
 
 const READERS: Record<string, (input: Input) => unknown> = {
@@ -933,6 +1583,8 @@ const READERS: Record<string, (input: Input) => unknown> = {
   get_exercise_history: getExerciseHistory,
   get_nutrition: getNutrition,
   get_plans: getPlans,
+  get_recovery: getRecovery,
+  get_week_report: getWeekReport,
 };
 
 const WRITERS: Record<string, (input: Input) => Write> = {
@@ -950,6 +1602,16 @@ const WRITERS: Record<string, (input: Input) => Write> = {
   log_workout: logWorkout,
   delete_workout: deleteWorkout,
   update_profile: updateProfile,
+  log_sleep: logSleep,
+  delete_sleep: deleteSleep,
+  log_cardio: logCardio,
+  delete_cardio: deleteCardio,
+  set_steps: setStepsTool,
+  log_check_in: logCheckIn,
+  update_settings: updateSettings,
+  set_phase: setPhase,
+  set_habits: setHabits,
+  check_habit: checkHabit,
 };
 
 const READ_LABELS: Record<string, string> = {
@@ -958,6 +1620,8 @@ const READ_LABELS: Record<string, string> = {
   get_exercise_history: 'Oefening-historie bekeken',
   get_nutrition: 'Voedingslog bekeken',
   get_plans: 'Schema’s bekeken',
+  get_recovery: 'Slaap en herstel bekeken',
+  get_week_report: 'Weekrapport bekeken',
 };
 
 export function runTool(name: string, rawInput: unknown): ToolOutcome {

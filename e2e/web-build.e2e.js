@@ -59,7 +59,7 @@ const server = http.createServer((req, res) => {
   await v(page.getByText('Volgende training')).waitFor();
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'service worker active');
   // Visit every tab once so its code is cached.
-  for (const p of ['/train', '/plans', '/food', '/coach', '/goals', '/weight', '/']) {
+  for (const p of ['/train', '/plans', '/food', '/recovery', '/progress', '/sleep', '/cardio', '/coach', '/goals', '/weight', '/']) {
     await page.goto(BASE + p);
     await page.waitForTimeout(1200);
   }

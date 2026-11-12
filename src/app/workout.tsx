@@ -22,10 +22,11 @@ import {
 } from '@/components/ui';
 import { clock, longDate } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
+import { deloadStatus } from '@/lib/recovery';
 import { AppBackground } from '@/components/background';
 import { radius, space, useColors } from '@/lib/theme';
 import type { Exercise, WorkoutExercise, WorkoutSet } from '@/lib/types';
-import { previousSets, setLabel, targetNumber } from '@/lib/workout-stats';
+import { previousSets, progressionHint, setLabel, targetNumber } from '@/lib/workout-stats';
 import { useExerciseLookup, useStore } from '@/store/store';
 
 export default function WorkoutScreen() {
@@ -37,6 +38,7 @@ export default function WorkoutScreen() {
   const renameWorkout = useStore((s) => s.renameWorkout);
   const finishWorkout = useStore((s) => s.finishWorkout);
   const discardWorkout = useStore((s) => s.discardWorkout);
+  const deloadWeek = useStore((s) => deloadStatus(s.settings, s.workouts).active);
   const now = useNow(1000, !!workout);
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
@@ -143,6 +145,11 @@ export default function WorkoutScreen() {
               style={{ fontSize: 26, fontWeight: '800', color: c.text, padding: 0 }}
             />
             <Txt variant="dim">{longDate(workout.startedAt)}</Txt>
+            {deloadWeek ? (
+              <Txt variant="small" color={c.accent} style={{ fontWeight: '600', marginTop: 4 }}>
+                Deloadweek: minder sets, zelfde gewicht, stop 3-4 reps voor falen.
+              </Txt>
+            ) : null}
           </View>
 
           {workout.exercises.map((we, i) => (
@@ -189,6 +196,8 @@ function ExerciseBlock({
   const prev = previousSets(workouts, ex.id, workoutId);
   const restSec = we.restSec ?? defaultRest;
   const target = targetNumber(we.target);
+  // Double progression: what to aim for today, based on the previous session.
+  const progression = progressionHint(prev, we.target, ex.kind);
 
   const toggle = (s: WorkoutSet, i: number) => {
     if (s.done) {
@@ -243,6 +252,24 @@ function ExerciseBlock({
         </Pressable>
         <IconButton icon="more" label={`Opties voor ${ex.name}`} onPress={remove} size={32} />
       </Row>
+      {progression ? (
+        <Row
+          gap={6}
+          style={{
+            alignItems: 'flex-start',
+            paddingHorizontal: space.sm,
+            paddingVertical: 6,
+            borderRadius: radius.sm,
+            backgroundColor: c.accentSoft,
+          }}>
+          <View style={{ marginTop: 1 }}>
+            <Icon name="target" size={13} color={c.accent} />
+          </View>
+          <Txt variant="small" color={c.text} style={{ flex: 1 }}>
+            {progression}
+          </Txt>
+        </Row>
+      ) : null}
 
       <View style={styles.headerRow}>
         <Txt variant="label" style={styles.colSet}>

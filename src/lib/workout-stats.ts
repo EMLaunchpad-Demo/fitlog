@@ -198,3 +198,54 @@ export function targetNumber(target?: string): number | null {
   const m = target.match(/\d+/);
   return m ? Number(m[0]) : null;
 }
+
+/** "6-10" -> [6, 10], "12" -> [12, 12]; null for time or cardio targets. */
+export function repRange(target?: string): [number, number] | null {
+  if (!target || /s|min|km/i.test(target)) return null;
+  const nums = target.match(/\d+/g)?.map(Number);
+  if (!nums?.length) return null;
+  return nums.length > 1 ? [Math.min(nums[0], nums[1]), Math.max(nums[0], nums[1])] : [nums[0], nums[0]];
+}
+
+/** Smallest sensible jump: light dumbbells go up by 1 kg, the rest by 2.5 kg. */
+function weightStep(weight: number): number {
+  return weight < 20 ? 1 : 2.5;
+}
+
+/**
+ * Double progression: stay at a weight until every set reaches the top of the
+ * rep range, then add weight and start again at the bottom of the range.
+ */
+export function progressionHint(
+  prev: WorkoutSet[],
+  target: string | undefined,
+  kind: Exercise['kind'],
+): string | null {
+  const range = repRange(target);
+  if (!range || (kind !== 'weight' && kind !== 'bodyweight')) return null;
+  const [lo, hi] = range;
+  const rangeText = lo === hi ? `${lo}` : `${lo}-${hi}`;
+  const sets = prev.filter((s) => s.reps != null);
+  if (!sets.length) {
+    return kind === 'weight'
+      ? `Kies een gewicht waarmee je ${rangeText} reps haalt met 1-2 reps in reserve.`
+      : `Mik op ${rangeText} reps met 1-2 reps in reserve.`;
+  }
+  const reps = sets.map((s) => s.reps ?? 0);
+  const allTop = reps.every((r) => r >= hi);
+  const anyBelow = reps.some((r) => r < lo);
+  if (kind === 'bodyweight' && !sets.some((s) => s.weight)) {
+    if (allTop) return `Alle sets op ${hi}: maak het zwaarder (extra gewicht of trager zakken).`;
+    return `Mik op een rep extra per set, tot je overal ${hi} haalt.`;
+  }
+  const weight = Math.max(...sets.map((s) => s.weight ?? 0));
+  if (!weight) return null;
+  if (allTop) {
+    const next = weight + weightStep(weight);
+    return `Alle sets op ${hi} reps: ga naar ${num(next)} kg en begin weer vanaf ${lo} reps.`;
+  }
+  if (anyBelow) {
+    return `Vorige keer onder de ${lo} reps: blijf op ${num(weight)} kg, of zak iets tot je ${lo} haalt.`;
+  }
+  return `Blijf op ${num(weight)} kg en mik op een rep extra per set, tot je overal ${hi} haalt.`;
+}

@@ -8,7 +8,7 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 
 **Coach (AI)**
 - Chat met een coach die je echte gegevens kan bekijken: trainingen, voortgang per oefening,
-  voeding, gewicht en je schema
+  voeding, gewicht, je schema, slaap, cardio, stappen, check-ins en je fase
 - Eten loggen in gewone taal ("2 boterhammen met pindakaas en een banaan") of met een foto
   van je bord; de coach schat porties en macro's en zet het in de juiste maaltijd
 - Kan alles in de app voor je aanpassen:
@@ -16,7 +16,12 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
   - voeding: loggen, gelogde items corrigeren of verwijderen, water, doelen
   - gewicht: wegingen toevoegen (ook vanaf een weegschaal-screenshot, met alle waarden) of verwijderen
   - trainingen: achteraf vastleggen ("gisteren 5 km gelopen") of verwijderen
+  - slaap, cardio, stappen en je dagelijkse check-in ("ik sliep van half elf tot kwart voor
+    zeven", "uur gefietst, rustig tempo"), ook vanaf een screenshot van je gezondheids-app
+  - je instellingen: slaapschema, vaste rustdagen, stappen- en cardiodoel, deload, gewoontes
+    en je fase (cut, onderhoud, bulk)
   - je profiel ("onthoud dat ik last heb van mijn knie")
+- Weekreview op verzoek: wat ging goed, wat kan beter, en één aanpassing voor volgende week
 - Elke actie verschijnt als kaartje in de chat; tik erop om het resultaat te zien
 - **Ongedaan maken:** elke wijziging van de coach draai je met één tik terug, zolang je die
   gegevens daarna niet zelf hebt aangepast. De coach krijgt bij je volgende bericht te horen
@@ -28,7 +33,11 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
   Voeding
 
 **Vandaag**
-- Je volgende training uit je actieve schema, met één tik starten
+- Je volgende training uit je actieve schema, met één tik starten; op een rustdag hersteltips
+  in plaats van een training
+- Vier tegels: herstelscore, slaap van afgelopen nacht, stappen en cardio deze week
+- 's Avonds een aftelling naar schermen uit en licht uit
+- Je dagelijkse gewoontes om af te vinken
 - Weekoverzicht (ma–zo) en een streak van weken op rij
 - Calorieën en macro's van vandaag, water, en je lichaamsgewicht met trendlijn
 - Weekgemiddelde gewicht met het verschil ten opzichte van vorige week
@@ -45,12 +54,32 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 - Na afloop: duur, sets, volume en automatische detectie van persoonlijke records
 - Per oefening: grafiek van je geschatte 1RM (Epley), zwaarste set en volledige geschiedenis
 - 57 ingebouwde oefeningen + eigen oefeningen toevoegen
+- **Dubbele progressie:** bij elke oefening staat wat je vandaag moet halen op basis van je
+  vorige training ("blijf op 60 kg, mik op een rep extra" of "alle sets op 10: ga naar 62,5 kg")
+- **Cardio & stappen:** sessies loggen (soort, minuten, intensiteit, afstand, hartslag) met
+  geschat verbruik, je weekdoel in minuten (zware minuten tellen dubbel) en stappen per dag
+- **Deloadweek:** met één tik aan; je schema start dan met de helft van de sets
 
 **Schema's**
 - Vier startschema's: PPL + Upper/Lower (5×, standaard actief), Full body (A/B),
   Push/Pull/Legs en Upper/Lower
 - Eigen schema's maken: dagen, oefeningen, sets, reps-doel en rusttijd per oefening
 - De app onthoudt welke dag de volgende is
+
+**Herstel**
+- Dagelijkse check-in (energie, spieren, stress, humeur) en een herstelscore die je met je
+  eigen gemiddelde vergelijkt, met advies voor de training van vandaag
+- Slaap loggen (tijden en kwaliteit), je slaapschema, gemiddelde, regelmaat en slaaptekort
+- Vaste rustdagen kiezen, deload-status en gewoontes
+
+**Voortgang**
+- Fase (cut, onderhoud, bulk) met start, einde en doeltempo: de app vergelijkt de trend van je
+  wegingen met het plan en stelt kleine stappen van 50-200 kcal voor
+- Weekrapport: trainingen, calorieën en eiwit met dagen op doel, slaap, stappen, cardio, gewicht
+- Harde sets per spiergroep per week naast de richtlijn van 10-20
+- Geschat dagelijks verbruik uit je voedingslog en gewichtstrend
+- **Onderbouwing:** per onderwerp wat het onderzoek zegt, hoe sterk het bewijs is en de bron,
+  naast je eigen cijfers. Zie `src/lib/guidelines.ts`
 
 **Voeding**
 - Dagelijks overzicht per maaltijd (ontbijt, lunch, diner, snacks), terugbladeren per dag
@@ -60,6 +89,12 @@ AI-coach draait op Claude met je eigen Anthropic API-key.
 - Waterteller
 - Doelen instellen, of laten berekenen (Mifflin-St Jeor) op basis van lengte, gewicht,
   leeftijd, activiteit en doel
+
+**Persoonlijke setup**
+- Persoonlijke cijfers (doelen, slaapschema, rustdagen, fase, schema's) staan niet in de code.
+  Je laadt ze in één keer met een setup-code via Instellingen → Persoonlijke setup laden, of
+  je vraagt de coach om alles volgens je profiel in te stellen. Het formaat staat in
+  `src/lib/setup.ts`. Een setup wijzigt alleen instellingen; wat je gelogd hebt blijft staan.
 
 > De voedingswaarden zijn afgeronde gemiddelden. Check het etiket voor exacte cijfers.
 
@@ -152,7 +187,7 @@ npx eas-cli@latest build --profile preview --platform ios       # vereist Apple 
 ```
 src/
   app/                 schermen (Expo Router, elk bestand is een route)
-    (tabs)/            Vandaag, Trainen, Schema's, Voeding
+    (tabs)/            Vandaag, Trainen, Voeding, Herstel, Voortgang
     workout.tsx        actieve training
     exercises.tsx      oefeningen kiezen / bladeren
     history/[id].tsx   afgeronde training
@@ -161,12 +196,20 @@ src/
     food-add.tsx       voeding toevoegen
     goals.tsx          doelen en calorieberekening
     weight.tsx         lichaamsgewicht
+    sleep.tsx          slaap loggen en slaapschema
+    cardio.tsx         cardio en stappen
+    checkin.tsx        dagelijkse check-in
+    phase.tsx          fase (cut, onderhoud, bulk)
+    plans.tsx          schema's
+    guide.tsx          onderbouwing met bronnen
+    setup.tsx          persoonlijke setup laden
     coach.tsx          AI-coach (chat)
     coach-settings.tsx API-key, model en verbruik
   ai/                  Claude-client, agent-loop, tools, systeemprompt, foto's, key-opslag
   components/          UI-bouwstenen, grafieken, tab bar, achtergrond (groen glass-thema)
   data/                ingebouwde oefeningen, voedingsmiddelen en schema's
-  lib/                 types, formattering (NL), statistieken, thema (kleuren + glass())
+  lib/                 types, formattering (NL), statistieken, thema (kleuren + glass()),
+                       herstel, cardio, fase, weekrapport, richtlijnen met bronnen
   store/store.ts       alle data en acties (zustand, bewaard in AsyncStorage)
 ```
 
