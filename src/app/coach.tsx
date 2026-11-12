@@ -87,7 +87,7 @@ function useChatItems(): Item[] {
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ attach?: ImageSource; text?: string }>();
+  const params = useLocalSearchParams<{ attach?: ImageSource; text?: string; send?: string }>();
   const items = useChatItems();
   const busy = useCoach((s) => s.busy);
   const activity = useCoach((s) => s.activity);
@@ -102,7 +102,10 @@ export default function CoachScreen() {
   const coachUpdated = useCoachUpdated();
 
   const [hasKey, setHasKey] = useState<boolean | null>(null);
-  const [text, setText] = useState(params.text ?? '');
+  // ?send=1 (e.g. "Analyseer mijn lichaam") sends the text straight away instead of prefilling it.
+  const autoSend = !!params.send && !!params.text;
+  const [text, setText] = useState(autoSend ? '' : (params.text ?? ''));
+  const autoSendDone = useRef(false);
   // Browsers only open a file/camera picker straight from a tap, so on the web
   // ?attach= shows a button instead of opening the picker automatically.
   const [attachPrompt, setAttachPrompt] = useState(Platform.OS === 'web' && !!params.attach);
@@ -141,6 +144,12 @@ export default function CoachScreen() {
       attach(params.attach);
     }
   }, [hasKey, params.attach, attach]);
+
+  useEffect(() => {
+    if (!autoSend || autoSendDone.current || hasKey !== true || busy) return;
+    autoSendDone.current = true;
+    sendToCoach(params.text!, []);
+  }, [autoSend, hasKey, busy, params.text]);
 
   const send = (value = text) => {
     if (busy || (!value.trim() && !pending.length)) return;

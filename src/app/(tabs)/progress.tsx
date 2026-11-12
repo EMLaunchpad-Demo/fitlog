@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Sparkline } from '@/components/charts';
 import { Icon } from '@/components/icon';
@@ -18,6 +18,8 @@ import {
   Txt,
   success,
 } from '@/components/ui';
+import { COACH_REQUESTS, askCoach } from '@/ai/shortcuts';
+import { daysUntilReview, findPlateaus, plateauAdvice } from '@/lib/analysis';
 import { dateKey, num, parseDateKey, shortDate } from '@/lib/format';
 import { VOLUME_RANGE } from '@/lib/guidelines';
 import { PHASE_LABEL, estimateEnergyUse, phaseProgress, phaseStatusText } from '@/lib/phase';
@@ -42,7 +44,10 @@ export default function ProgressScreen() {
   const checkIns = useStore((s) => s.checkIns);
   const settings = useStore((s) => s.settings);
   const setGoals = useStore((s) => s.setGoals);
+  const coachPlan = useStore((s) => s.coachPlan);
+  const measures = useStore((s) => s.measures);
   const getExercise = useExerciseLookup();
+  const [showPlan, setShowPlan] = useState(false);
   const [weekChoice, setWeekChoice] = useState<WeekChoice>('deze');
 
   const today = dateKey();
@@ -56,6 +61,10 @@ export default function ProgressScreen() {
   const muscles = weeklyMuscleSets(workouts, weekStart, getExercise);
   const energy = estimateEnergyUse(foodLog, bodyWeights, 21, today);
   const targetSleep = targetSleepMinutes(settings.sleep);
+
+  const reviewIn = coachPlan ? daysUntilReview(coachPlan, today) : null;
+  const plateaus = findPlateaus(workouts, getExercise);
+  const lastMeasure = measures[measures.length - 1];
 
   const weeks = weeklyAverages(bodyWeights, (b) => b.kg);
   const latestWeek = weeks[weeks.length - 1];
@@ -130,6 +139,68 @@ export default function ProgressScreen() {
 
   return (
     <TabScreen title="Voortgang">
+      <Card>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <Row gap={space.sm}>
+            <Icon name="sparkles" size={14} color={c.accent} />
+            <Txt variant="label">Mijn plan</Txt>
+          </Row>
+          {coachPlan ? (
+            <Txt variant="small">van {shortDate(parseDateKey(coachPlan.date))}</Txt>
+          ) : null}
+        </Row>
+        {coachPlan ? (
+          <>
+            <View style={{ gap: 6 }}>
+              {coachPlan.focus.map((f, i) => (
+                <Row key={i} gap={space.sm} style={{ alignItems: 'flex-start' }}>
+                  <View style={{ marginTop: 4 }}>
+                    <Icon name="target" size={13} color={c.accent} />
+                  </View>
+                  <Txt style={{ flex: 1 }}>{f}</Txt>
+                </Row>
+              ))}
+            </View>
+            <Txt variant="dim" numberOfLines={showPlan ? undefined : 4}>
+              {coachPlan.summary}
+            </Txt>
+            <Pressable accessibilityRole="button" onPress={() => setShowPlan(!showPlan)}>
+              <Txt variant="small" color={c.accent} style={{ fontWeight: '600' }}>
+                {showPlan ? 'Minder tonen' : 'Hele analyse lezen'}
+              </Txt>
+            </Pressable>
+            <Txt variant="small" color={reviewIn! <= 0 ? c.accent : undefined}>
+              {reviewIn! <= 0
+                ? 'Tijd voor een nieuwe analyse: je coach kijkt wat er veranderd is en stuurt bij.'
+                : `Nieuwe analyse over ${reviewIn} ${reviewIn === 1 ? 'dag' : 'dagen'} (${shortDate(parseDateKey(coachPlan.reviewDate))}).`}
+            </Txt>
+            <Button
+              label="Plan herzien"
+              icon="sparkles"
+              variant={reviewIn! <= 0 ? 'primary' : 'secondary'}
+              onPress={() => askCoach(COACH_REQUESTS.review)}
+            />
+          </>
+        ) : (
+          <>
+            <Txt variant="dim">
+              Laat je coach je lichaam en je gegevens analyseren. Hij kiest zelf je fase en je
+              voedingsdoelen, stuurt je training bij en kijkt om de twee weken opnieuw.
+            </Txt>
+            <Button
+              label="Analyseer mijn lichaam"
+              icon="sparkles"
+              size="lg"
+              onPress={() => askCoach(COACH_REQUESTS.analyse)}
+            />
+            <Txt variant="small">
+              Hoe meer je logt (wegingen, taille, trainingen, voeding, slaap), hoe scherper de
+              analyse.
+            </Txt>
+          </>
+        )}
+      </Card>
+
       {phase && progress ? (
         <Card>
           <Row style={{ justifyContent: 'space-between' }}>
@@ -199,6 +270,15 @@ export default function ProgressScreen() {
                 style={{ flex: 1 }}
               />
             ) : null}
+            {progress.ended ? (
+              <Button
+                label="Nieuw plan van je coach"
+                icon="sparkles"
+                size="sm"
+                onPress={() => askCoach(COACH_REQUESTS.review)}
+                style={{ flex: 1 }}
+              />
+            ) : null}
             <Button
               label="Fase aanpassen"
               variant="secondary"
@@ -212,10 +292,15 @@ export default function ProgressScreen() {
         <Card>
           <Txt variant="label">Fase</Txt>
           <Txt variant="dim">
-            Zit je in een cut, bulk of onderhoud? Stel het in, dan vergelijkt de app je gewichtstrend
-            met je doeltempo en zegt wanneer je moet bijsturen.
+            Cut, onderhoud of bulk: je coach kiest de fase bij zijn analyse, of je stelt hem zelf in.
+            De app vergelijkt daarna je gewichtstrend met het doeltempo.
           </Txt>
-          <Button label="Fase instellen" icon="target" onPress={() => router.push('/phase')} />
+          <Button
+            label="Zelf een fase instellen"
+            icon="target"
+            variant="secondary"
+            onPress={() => router.push('/phase')}
+          />
         </Card>
       )}
 
@@ -343,7 +428,51 @@ export default function ProgressScreen() {
         </Card>
       ) : null}
 
+      {plateaus.length ? (
+        <>
+          <SectionTitle title="Stagnatie" />
+          <Card>
+            {plateaus.slice(0, 4).map((p) => (
+              <View key={p.exerciseId} style={{ gap: 2 }}>
+                <Row style={{ justifyContent: 'space-between' }}>
+                  <Txt variant="h3" style={{ flex: 1 }} numberOfLines={1}>
+                    {p.name}
+                  </Txt>
+                  <Txt variant="small">{p.stalled} trainingen gelijk</Txt>
+                </Row>
+                <Txt variant="small">Laatst: {p.lastSets}</Txt>
+              </View>
+            ))}
+            <Note>{plateauAdvice(phase?.type === 'cut')}</Note>
+            <Button
+              label="Vraag je coach om een oplossing"
+              icon="sparkles"
+              variant="secondary"
+              onPress={() =>
+                askCoach(
+                  `Ik stagneer op ${plateaus
+                    .slice(0, 3)
+                    .map((p) => p.name)
+                    .join(', ')}. Bekijk mijn geschiedenis en pas mijn schema aan waar dat helpt.`,
+                )
+              }
+            />
+          </Card>
+        </>
+      ) : null}
+
       <Card style={{ paddingVertical: space.sm, gap: 0 }}>
+        <ListRow
+          title="Lichaamsmaten"
+          subtitle={
+            lastMeasure?.waist
+              ? `Taille ${num(lastMeasure.waist, 1)} cm · ${shortDate(parseDateKey(lastMeasure.date))}`
+              : 'Taille en andere maten bijhouden'
+          }
+          left={<Icon name="target" size={20} color={c.accent} />}
+          onPress={() => router.push('/body')}
+        />
+        <Divider />
         <ListRow
           title="Oefeningen & records"
           subtitle="Je voortgang per oefening"

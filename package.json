@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/ui": "~58.0.27",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@zxing/library": "^0.21.3",
     "expo": "~58.0.23",
     "expo-constants": "~58.0.15",
     "expo-device": "~58.0.5",
@@ -51,7 +52,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "node e2e/app.e2e.js && node e2e/coach.e2e.js && node e2e/coach-actions.e2e.js && node e2e/recovery.e2e.js",
+    "test:e2e": "node e2e/app.e2e.js && node e2e/coach.e2e.js && node e2e/coach-actions.e2e.js && node e2e/recovery.e2e.js && node e2e/plan.e2e.js",
     "test:web-build": "expo export --platform web && node e2e/web-build.e2e.js"
   },
   "private": true

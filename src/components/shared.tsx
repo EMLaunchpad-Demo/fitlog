@@ -93,3 +93,25 @@ export function CalorieRing({
     </Ring>
   );
 }
+
+export function MacroLine({ m }: { m: Macros }) {
+  const c = useColors();
+  const items = [
+    { label: 'kcal', value: num(m.kcal, 0), color: c.accent },
+    { label: 'eiwit', value: `${num(m.protein)} g`, color: c.protein },
+    { label: 'koolh.', value: `${num(m.carbs)} g`, color: c.carbs },
+    { label: 'vet', value: `${num(m.fat)} g`, color: c.fat },
+  ];
+  return (
+    <Row style={{ justifyContent: 'space-between' }}>
+      {items.map((i) => (
+        <View key={i.label} style={{ alignItems: 'center', flex: 1 }}>
+          <Txt variant="h3" color={i.color} style={{ fontVariant: ['tabular-nums'] }}>
+            {i.value}
+          </Txt>
+          <Txt variant="small">{i.label}</Txt>
+        </View>
+      ))}
+    </Row>
+  );
+}

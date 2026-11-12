@@ -71,6 +71,9 @@ export default function RootLayout() {
           <Stack.Screen name="cardio" options={{ presentation: 'modal', title: 'Cardio & stappen' }} />
           <Stack.Screen name="checkin" options={{ presentation: 'modal', title: 'Check-in' }} />
           <Stack.Screen name="phase" options={{ presentation: 'modal', title: 'Fase' }} />
+          <Stack.Screen name="body" options={{ presentation: 'modal', title: 'Lichaamsmaten' }} />
+          <Stack.Screen name="menu" options={{ title: 'Weekmenu' }} />
+          <Stack.Screen name="scan" options={{ presentation: 'modal', title: 'Barcode scannen' }} />
           <Stack.Screen name="setup" options={{ presentation: 'modal', title: 'Persoonlijke setup' }} />
           <Stack.Screen name="plans" options={{ title: 'Schema’s' }} />
           <Stack.Screen name="guide" options={{ title: 'Onderbouwing' }} />

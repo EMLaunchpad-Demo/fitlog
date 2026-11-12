@@ -30,6 +30,7 @@ import { useStore } from '@/store/store';
 
 const REST_CHOICES = [60, 90, 120, 180];
 const DELOAD_CHOICES = [0, 4, 6, 8];
+const BAR_CHOICES = [20, 15, 10];
 
 export default function GoalsScreen() {
   const c = useColors();
@@ -62,6 +63,7 @@ export default function GoalsScreen() {
   const [stepGoal, setStepGoal] = useState<number | null>(settings.stepGoal);
   const [cardioGoal, setCardioGoal] = useState<number | null>(settings.cardioGoalMin);
   const [deloadEvery, setDeloadEvery] = useState(settings.deloadEveryWeeks);
+  const [barKg, setBarKg] = useState(settings.barKg);
   const age = ageFromBirthYear(birthYear) ?? 30;
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
@@ -97,6 +99,7 @@ export default function GoalsScreen() {
       stepGoal: stepGoal && stepGoal >= 1000 ? Math.round(stepGoal) : settings.stepGoal,
       cardioGoalMin: cardioGoal != null && cardioGoal >= 0 ? Math.round(cardioGoal) : settings.cardioGoalMin,
       deloadEveryWeeks: deloadEvery,
+      barKg,
     });
     success();
     close();
@@ -249,6 +252,12 @@ export default function GoalsScreen() {
               selected={defaultRestSec === s}
               onPress={() => setDefaultRest(s)}
             />
+          ))}
+        </Row>
+        <Txt variant="small">Gewicht van de stang (voor de schijvenrekenaar)</Txt>
+        <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+          {BAR_CHOICES.map((kg) => (
+            <Chip key={kg} label={`${kg} kg`} selected={barKg === kg} onPress={() => setBarKg(kg)} />
           ))}
         </Row>
         <Txt variant="small">Herinner me aan een deloadweek na</Txt>

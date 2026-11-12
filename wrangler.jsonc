@@ -11,5 +11,7 @@
     "directory": "dist",
     // Serve index.html for app routes such as /coach (Expo Router is a single-page app).
     "not_found_handling": "single-page-application"
-  }
+  },
+  // Needed for preview deployments of branches (`wrangler preview`); they use the settings above.
+  "previews": {}
 }

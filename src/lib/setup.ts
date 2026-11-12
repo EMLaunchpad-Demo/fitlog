@@ -66,6 +66,8 @@ function cleanSettings(raw: unknown): SettingsPatch | undefined {
   if (isNum(raw.stepGoal, 1000, 50000)) out.stepGoal = Math.round(raw.stepGoal);
   if (isNum(raw.cardioGoalMin, 0, 2000)) out.cardioGoalMin = Math.round(raw.cardioGoalMin);
   if (isNum(raw.deloadEveryWeeks, 0, 26)) out.deloadEveryWeeks = Math.round(raw.deloadEveryWeeks);
+  if (isNum(raw.barKg, 5, 30)) out.barKg = raw.barKg;
+  if (typeof raw.briefing === 'boolean') out.briefing = raw.briefing;
   if (Array.isArray(raw.restDays))
     out.restDays = [...new Set(raw.restDays.filter((d): d is number => isNum(d, 0, 6)))].sort();
   if (isObj(raw.sleep)) {
@@ -159,6 +161,9 @@ export function parseSetup(text: string): ParsedSetup {
         `Beweegdoelen${settings.stepGoal ? `: ${settings.stepGoal} stappen` : ''}${settings.cardioGoalMin ? `, ${settings.cardioGoalMin} min cardio per week` : ''}`,
       );
     if (settings.heightCm || settings.birthYear) summary.push('Lengte en geboortejaar');
+    if (settings.phase === null) summary.push('Geen fase (je coach kiest die bij zijn analyse)');
+    if (settings.briefing != null)
+      summary.push(`Ochtendbriefing ${settings.briefing ? 'aan' : 'uit'}`);
   }
   if (Array.isArray(raw.habits)) {
     const habits = raw.habits

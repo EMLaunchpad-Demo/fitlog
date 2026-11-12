@@ -9,19 +9,25 @@ import { dateKey, uid } from '@/lib/format';
 import { deloadSets, deloadStatus } from '@/lib/recovery';
 import type {
   BodyComposition,
+  BodyMeasure,
   BodyWeight,
+  Briefing,
   CardioSession,
   CheckIn,
+  CoachPlan,
   Exercise,
   Food,
   FoodEntry,
   Goals,
   Habit,
+  MealItem,
   Plan,
   PlanExercise,
   Profile,
+  SavedMeal,
   Settings,
   SleepEntry,
+  WeekMenu,
   Workout,
   WorkoutExercise,
   WorkoutSet,
@@ -62,6 +68,15 @@ interface State {
   /** Ids of the habits done, per date */
   habitLog: Record<string, string[]>;
   settings: Settings;
+
+  /** One entry per date, oldest first */
+  measures: BodyMeasure[];
+  /** The coach's current plan, and earlier ones (newest first) */
+  coachPlan: CoachPlan | null;
+  planHistory: CoachPlan[];
+  savedMeals: SavedMeal[];
+  weekMenu: WeekMenu | null;
+  briefing: Briefing | null;
 }
 
 export type SettingsPatch = Partial<Omit<Settings, 'sleep'>> & {
@@ -142,6 +157,22 @@ interface Actions {
   setSettings: (patch: SettingsPatch) => void;
   /** Marks this week as a deload week (or undoes that). */
   setDeloadWeek: (on: boolean) => void;
+
+  // Measurements and the coach's plan
+  /** Merges into the measurement of that date. */
+  logMeasure: (date: string, values: Omit<BodyMeasure, 'id' | 'date'>) => void;
+  removeMeasure: (date: string) => void;
+  /** Makes this the current plan; the previous one moves to the history. */
+  setCoachPlan: (plan: Omit<CoachPlan, 'id'>) => void;
+
+  // Saved meals and the week menu
+  saveMeal: (meal: { name: string; portions: number; items: MealItem[] }) => string;
+  removeSavedMeal: (id: string) => void;
+  /** Logs the items of a saved meal, scaled to the portions eaten. */
+  logMealItems: (items: MealItem[], date: string, meal: FoodEntry['meal'], factor?: number) => void;
+  setWeekMenu: (menu: Omit<WeekMenu, 'id' | 'createdAt'> | null) => void;
+  toggleShoppingItem: (index: number) => void;
+  setBriefing: (briefing: Briefing | null) => void;
 }
 
 export type Store = State & Actions;
@@ -194,6 +225,8 @@ export const DEFAULT_SETTINGS: Settings = {
   deloadEveryWeeks: 6,
   lastDeloadWeek: null,
   phase: null,
+  barKg: 20,
+  briefing: false,
 };
 
 const initialState: State = {
@@ -217,6 +250,12 @@ const initialState: State = {
   habits: [],
   habitLog: {},
   settings: DEFAULT_SETTINGS,
+  measures: [],
+  coachPlan: null,
+  planHistory: [],
+  savedMeals: [],
+  weekMenu: null,
+  briefing: null,
 };
 
 /** Fills in anything missing from stored or imported settings (older versions, partial imports). */
@@ -627,6 +666,87 @@ export const useStore = create<Store>()(
             sleep: { ...s.settings.sleep, ...(patch.sleep ?? {}) },
           },
         })),
+
+      // ───────────────────────── Measurements, plan, meals ─────────────────────────
+      logMeasure: (date, values) =>
+        set((s) => {
+          const existing = s.measures.find((m) => m.date === date);
+          const merged = { ...(existing ?? { id: uid(), date }), ...values };
+          return {
+            measures: [...s.measures.filter((m) => m.date !== date), merged].sort((a, b) =>
+              a.date.localeCompare(b.date),
+            ),
+          };
+        }),
+
+      removeMeasure: (date) =>
+        set((s) => ({ measures: s.measures.filter((m) => m.date !== date) })),
+
+      setCoachPlan: (plan) =>
+        set((s) => ({
+          coachPlan: { ...plan, id: uid() },
+          planHistory: s.coachPlan ? [s.coachPlan, ...s.planHistory].slice(0, 12) : s.planHistory,
+        })),
+
+      saveMeal: (meal) => {
+        const id = uid();
+        set((s) => ({
+          savedMeals: [
+            // A meal with the same name is replaced, so "save again" updates it.
+            ...s.savedMeals.filter((m) => m.name.toLowerCase() !== meal.name.trim().toLowerCase()),
+            { ...meal, name: meal.name.trim(), id, createdAt: Date.now() },
+          ],
+        }));
+        return id;
+      },
+
+      removeSavedMeal: (id) =>
+        set((s) => ({ savedMeals: s.savedMeals.filter((m) => m.id !== id) })),
+
+      logMealItems: (items, date, meal, factor = 1) =>
+        set((s) => {
+          const now = Date.now();
+          const round = (n: number) => Math.round(n * factor * 10) / 10;
+          return {
+            foodLog: [
+              ...s.foodLog,
+              ...items.map((item, i) => ({
+                id: uid(),
+                createdAt: now + i,
+                date,
+                meal,
+                name: item.name,
+                amountLabel:
+                  factor === 1
+                    ? item.amountLabel
+                    : `${String(Math.round(factor * 100) / 100).replace('.', ',')}× ${item.amountLabel}`,
+                kcal: Math.round(item.kcal * factor),
+                protein: round(item.protein),
+                carbs: round(item.carbs),
+                fat: round(item.fat),
+              })),
+            ],
+          };
+        }),
+
+      setWeekMenu: (menu) =>
+        set({ weekMenu: menu ? { ...menu, id: uid(), createdAt: Date.now() } : null }),
+
+      toggleShoppingItem: (index) =>
+        set((s) =>
+          s.weekMenu
+            ? {
+                weekMenu: {
+                  ...s.weekMenu,
+                  shopping: s.weekMenu.shopping.map((item, i) =>
+                    i === index ? { ...item, done: !item.done } : item,
+                  ),
+                },
+              }
+            : s,
+        ),
+
+      setBriefing: (briefing) => set({ briefing }),
 
       setDeloadWeek: (on) =>
         set((s) => {

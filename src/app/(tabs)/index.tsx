@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Sparkline } from '@/components/charts';
@@ -15,6 +16,9 @@ import {
   TabScreen,
   tap,
 } from '@/components/ui';
+import { refreshBriefing } from '@/ai/briefing';
+import { COACH_REQUESTS, askCoach } from '@/ai/shortcuts';
+import { daysUntilReview } from '@/lib/analysis';
 import { weekCardio } from '@/lib/cardio';
 import {
   addDays,
@@ -64,6 +68,14 @@ export default function TodayScreen() {
   const habits = useStore((s) => s.habits);
   const habitLog = useStore((s) => s.habitLog);
   const toggleHabit = useStore((s) => s.toggleHabit);
+  const coachPlan = useStore((s) => s.coachPlan);
+  const briefing = useStore((s) => s.briefing);
+  const briefingOn = useStore((s) => s.settings.briefing);
+
+  // One short note from the coach per day, when switched on (Coach-instellingen).
+  useEffect(() => {
+    if (briefingOn) refreshBriefing().catch(() => {});
+  }, [briefingOn]);
   const now = new Date(useNow(60_000));
 
   const today = dateKey(now);
@@ -137,6 +149,16 @@ export default function TodayScreen() {
         </Row>
       }>
       <ActiveWorkoutBanner />
+
+      {briefingOn && briefing?.date === today ? (
+        <Card tone="alt" onPress={() => router.push('/coach')}>
+          <Row gap={space.sm}>
+            <Icon name="sparkles" size={14} color={c.accent} />
+            <Txt variant="label">Briefing van je coach</Txt>
+          </Row>
+          <Txt>{briefing.text}</Txt>
+        </Card>
+      ) : null}
 
       {windDown ? (
         <Card tone="alt" onPress={() => router.push('/sleep')}>
@@ -344,6 +366,51 @@ export default function TodayScreen() {
           />
         </Row>
       </Card>
+
+      {coachPlan ? (
+        <Card onPress={() => router.push('/progress')}>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Row gap={space.sm}>
+              <Icon name="sparkles" size={14} color={c.accent} />
+              <Txt variant="label">Focus van je plan</Txt>
+            </Row>
+            {daysUntilReview(coachPlan, today) <= 0 ? (
+              <Txt variant="small" color={c.accent} style={{ fontWeight: '600' }}>
+                nieuwe analyse klaar
+              </Txt>
+            ) : null}
+          </Row>
+          <View style={{ gap: 6 }}>
+            {coachPlan.focus.slice(0, 3).map((f, i) => (
+              <Row key={i} gap={space.sm} style={{ alignItems: 'flex-start' }}>
+                <View style={{ marginTop: 4 }}>
+                  <Icon name="target" size={13} color={c.accent} />
+                </View>
+                <Txt variant="dim" color={c.text} style={{ flex: 1 }}>
+                  {f}
+                </Txt>
+              </Row>
+            ))}
+          </View>
+        </Card>
+      ) : (
+        <Card>
+          <Row gap={space.sm}>
+            <Icon name="sparkles" size={14} color={c.accent} />
+            <Txt variant="label">Jouw plan</Txt>
+          </Row>
+          <Txt variant="dim">
+            Laat je coach je lichaam en je gegevens analyseren. Hij kiest je fase en je doelen en
+            stuurt je training bij.
+          </Txt>
+          <Button
+            label="Analyseer mijn lichaam"
+            icon="sparkles"
+            variant="secondary"
+            onPress={() => askCoach(COACH_REQUESTS.analyse)}
+          />
+        </Card>
+      )}
 
       <Card onPress={() => router.push('/train')}>
         <Row style={{ justifyContent: 'space-between' }}>

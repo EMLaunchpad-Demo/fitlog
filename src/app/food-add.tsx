@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
+import { SavedMeals } from '@/components/saved-meals';
+import { MacroLine } from '@/components/shared';
 import {
   Button,
   Card,
@@ -28,10 +30,10 @@ type Unit = 'g' | 'unit' | 'portie';
 
 export default function FoodAdd() {
   const c = useColors();
-  const params = useLocalSearchParams<{ date?: string; meal?: Meal }>();
+  const params = useLocalSearchParams<{ date?: string; meal?: Meal; tab?: 'search' | 'meals' }>();
   const date = params.date ?? dateKey();
   const [meal, setMeal] = useState<Meal>(params.meal ?? mealForNow());
-  const [tab, setTab] = useState<'search' | 'quick'>('search');
+  const [tab, setTab] = useState<'search' | 'quick' | 'meals'>(params.tab ?? 'search');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Food | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
@@ -126,15 +128,24 @@ export default function FoodAdd() {
         options={[
           { key: 'search', label: 'Zoeken' },
           { key: 'quick', label: 'Snel invoeren' },
+          { key: 'meals', label: 'Maaltijden' },
         ]}
         value={tab}
         onChange={setTab}
       />
 
-      {tab === 'quick' ? (
+      {tab === 'meals' ? (
+        <SavedMeals date={date} meal={meal} onAdded={(name) => setAdded((x) => [...x, name])} />
+      ) : tab === 'quick' ? (
         <QuickAdd onAdd={add} />
       ) : (
         <>
+          <Button
+            label="Scan barcode"
+            icon="barcode"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/scan', params: { date, meal } })}
+          />
           {selected ? (
             <Card style={{ borderColor: c.accent, borderWidth: 1.5 }}>
               <Row style={{ justifyContent: 'space-between' }}>
@@ -331,28 +342,6 @@ function FoodRow({
       </View>
       <Icon name="plus" size={16} color={c.accent} />
     </Pressable>
-  );
-}
-
-function MacroLine({ m }: { m: Macros }) {
-  const c = useColors();
-  const items = [
-    { label: 'kcal', value: num(m.kcal, 0), color: c.accent },
-    { label: 'eiwit', value: `${num(m.protein)} g`, color: c.protein },
-    { label: 'koolh.', value: `${num(m.carbs)} g`, color: c.carbs },
-    { label: 'vet', value: `${num(m.fat)} g`, color: c.fat },
-  ];
-  return (
-    <Row style={{ justifyContent: 'space-between' }}>
-      {items.map((i) => (
-        <View key={i.label} style={{ alignItems: 'center', flex: 1 }}>
-          <Txt variant="h3" color={i.color} style={{ fontVariant: ['tabular-nums'] }}>
-            {i.value}
-          </Txt>
-          <Txt variant="small">{i.label}</Txt>
-        </View>
-      ))}
-    </Row>
   );
 }
 

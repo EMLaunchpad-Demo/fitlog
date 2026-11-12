@@ -345,7 +345,11 @@ async function runLoop(apiKey: string): Promise<void> {
 }
 
 function activityLabel(tool: string): string {
+  if (tool === 'get_body_analysis') return 'Lichaam analyseren…';
   if (tool.startsWith('get_')) return 'Gegevens bekijken…';
+  if (tool === 'save_plan') return 'Plan opslaan…';
+  if (tool.includes('meal') || tool.includes('menu')) return 'Voeding bijwerken…';
+  if (tool === 'log_measurements') return 'Maten bijwerken…';
   if (tool.includes('plan')) return 'Schema aanpassen…';
   if (tool.includes('food') || tool === 'set_water' || tool === 'set_nutrition_goals')
     return 'Voeding bijwerken…';
